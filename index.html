@@ -1,0 +1,3017 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hide and Seek with Glowbies</title></head><body>
+<style>
+/* Layout: one phone screen — status strip, floor plan of the flat (tap rooms to walk), story log, action list; modals for scenes */
+:root{
+  --wall:#1d1a2b; --plan:#2a2540; --line:#4a4266; --ink:#f3eefa; --muted:#a79fbe;
+  --lamp:#ffcf7a; --glow:#b8f27c; --alarm:#ff7d8e; --m:#7fc8ff;
+  --wood:#3a2f3a; --tile:#2c3346; --carpet:#33284a;
+  --display:"Fredoka","Trebuchet MS",system-ui,sans-serif;
+  --body:"Nunito",system-ui,-apple-system,sans-serif;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--wall);color:var(--ink);font-family:var(--body);-webkit-tap-highlight-color:transparent;touch-action:manipulation;overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+.app{max-width:540px;margin:0 auto;box-sizing:border-box;padding-inline:12px;padding-block:8px;display:flex;flex-direction:column;gap:8px;height:100%}
+.top{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;flex:none}
+.clock{font-family:var(--display);font-weight:700;font-size:1.45rem;font-variant-numeric:tabular-nums;color:var(--lamp);line-height:1}
+.clock small{display:block;font-family:var(--body);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-top:3px}
+.sus{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sus span{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.bar{height:10px;border-radius:5px;background:var(--plan);overflow:hidden}
+.bar div{height:100%;background:linear-gradient(90deg,var(--lamp),var(--alarm));transition:width .4s}
+.bag{text-align:right;font-size:.8rem;color:var(--muted);font-weight:700;line-height:1.3}
+.bag b{display:block;font-family:var(--display);font-size:1.3rem;color:var(--glow);font-weight:700}
+
+.plan{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;flex:1 1 auto;min-height:190px;gap:5px;background:var(--line);border:5px solid var(--line);border-radius:12px}
+.room{position:relative;border:0;padding:8px;text-align:left;font-family:var(--body);color:var(--ink);display:flex;flex-direction:column;justify-content:space-between;gap:6px;cursor:pointer;min-width:0}
+.room[data-r="schlaf"],.room[data-r="wohn"]{background:repeating-linear-gradient(90deg,var(--wood) 0 18px,#312831 18px 19px)}
+.room[data-r="bad"],.room[data-r="kueche"]{background:repeating-conic-gradient(var(--tile) 0 25%,#565c6b 0 50%) 0 0/22px 22px}
+.room[data-r="flur"]{background:var(--carpet)}
+.room[data-r="arbeit"]{background:repeating-linear-gradient(45deg,#262a3a 0 8px,#22263a 8px 16px)}
+.room .nm{font-size:.52rem;letter-spacing:.05em;max-width:calc(100% - 44px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;overflow-wrap:anywhere;text-transform:uppercase;font-weight:800;color:var(--muted);background:rgba(29,26,43,0.70);padding:2px 5px;border-radius:4px;align-self:flex-start}
+.room .who{display:flex;gap:4px;flex-wrap:wrap;align-items:center;min-height:30px}
+.tok{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:.95rem}
+.tok.l{background:var(--lamp);color:var(--wall);box-shadow:0 0 0 3px rgba(255,207,122,0.35)}
+.tok.m{background:var(--m);color:var(--wall)}
+.pkg{width:20px;height:16px;background:#c79a5c;border-radius:3px;box-shadow:inset 0 -3px 0 #9c7440;position:relative}
+.pkg::after{content:"";position:absolute;left:8px;top:0;width:4px;height:100%;background:#e8d3a6}
+.dots{display:flex;gap:3px}
+.dots i{width:8px;height:8px;border-radius:50%;background:var(--glow);box-shadow:0 0 6px var(--glow)}
+.room.here{box-shadow:inset 0 0 0 3px var(--lamp)}
+.room.near{cursor:pointer}
+.room.near::after{content:"→";position:absolute;right:7px;top:5px;color:var(--lamp);font-weight:800}
+.room.far{filter:brightness(.72);cursor:default}
+.room.closed .nm::after{content:" · zu";color:var(--m)}
+.room:focus-visible{outline:3px solid var(--ink);outline-offset:-3px;z-index:1}
+
+.log{flex:1 1 auto;background:var(--plan);border-radius:12px;padding:7px 10px;display:flex;flex-direction:column;justify-content:flex-end;gap:4px;min-height:4.1em;overflow:hidden;line-height:1.3;font-size:.82rem}
+.log p{margin:0}
+.log p.cue{color:var(--m);font-style:italic}
+.log p.bad{color:var(--alarm)}
+.log p.good{color:var(--glow)}
+.log p{flex:none}
+.log{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 1.6em);mask-image:linear-gradient(to bottom,transparent 0,#000 1.6em)}
+.log p:not(:last-child){opacity:.5;font-size:.76rem}
+
+.acts{flex:none;display:flex;flex-direction:column;gap:6px;transition:opacity .2s}
+.acts.cool .btn{opacity:.45}
+.acts h2{font-family:var(--display);font-size:.95rem;margin:0;font-weight:700;display:flex;justify-content:space-between;gap:8px}
+.acts h2 small{font-family:var(--body);font-size:.72rem;color:var(--muted);font-weight:700}
+.spots{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.spot{display:grid;grid-template-columns:1fr auto;grid-template-areas:"n c" "d d";column-gap:6px;row-gap:2px;align-items:start;background:var(--plan);border:1px solid transparent;border-radius:10px;padding:6px 6px 7px 8px;min-width:0;text-align:left;font-family:var(--body);color:var(--ink);cursor:pointer;-webkit-touch-callout:none;transition:transform .12s,border-color .2s}
+.spot:active{transform:scale(.97)}
+.spot .n{grid-area:n;font-size:.76rem;font-weight:800;line-height:1.2;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;align-self:center}
+.spot .d{grid-area:d;font-size:.67rem;line-height:1.25;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.spot .c{grid-area:c;display:flex;align-items:center;gap:3px;border-radius:999px;padding:4px 9px 4px 7px;font-family:var(--display);font-weight:700;font-size:.85rem;background:var(--lamp);color:var(--wall);white-space:nowrap}
+.spot .c i{font-style:normal;font-size:1rem;line-height:1}
+.spot.no .c{background:transparent;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
+.spot.has{border-color:rgba(184,242,124,0.45)}
+.spot.long{animation:pulse .35s}
+@keyframes pulse{50%{transform:scale(.94)}}
+.btn{font-family:var(--body);font-weight:800;font-size:.8rem;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.btn.sq{width:32px;height:32px;padding:0;font-size:1.1rem;font-family:var(--display)}
+.btn.go{background:var(--lamp);color:var(--wall);border-color:var(--lamp)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn:focus-visible{outline:3px solid var(--lamp);outline-offset:2px}
+.row{display:flex;gap:6px;flex-wrap:wrap;min-height:32px}
+.row:empty{display:none}
+
+.modal{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;padding-inline:16px;background:rgba(29,26,43,0.80);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);z-index:10}
+.sheet{max-width:420px;width:100%;max-height:88%;overflow-y:auto;background:var(--plan);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:12px;box-sizing:border-box}
+.sheet h3{font-family:var(--display);font-size:1.5rem;margin:0;color:var(--lamp);text-wrap:balance}
+.sheet p{margin:0;line-height:1.55}
+.sheet .say{background:var(--wall);border-radius:12px;padding:10px 12px}
+.sheet .say b{color:var(--m)}
+.sheet .say b.lq{color:var(--lamp)}
+.choice{display:flex;flex-direction:column;gap:8px}
+.choice .btn{text-align:left;border-radius:12px;padding:10px 14px;font-weight:700}
+.stat{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-variant-numeric:tabular-nums}
+.stat span:nth-child(even){font-weight:800;text-align:right}
+.room>*{position:relative;z-index:1}
+.room .furn{position:absolute;left:0;right:0;bottom:0;height:78%;z-index:0;pointer-events:none}
+.room .furn svg{width:100%;height:100%;display:block}
+.gbm{filter:drop-shadow(0 0 2.5px #b8f27c)}
+.room .who{justify-content:flex-end;min-height:0;position:absolute;right:5px;top:5px}
+.tok{width:28px;height:28px;border-radius:50%;overflow:hidden;display:block;transition:transform .3s}
+.tok.m{box-shadow:0 0 0 2px var(--m)}
+.room .furn{height:84%!important}
+.ctl{display:flex;gap:4px}
+.ic{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--plan);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0;font-family:var(--display);font-weight:700;font-size:.78rem}
+.ic svg{width:14px;height:14px}
+.ic[aria-pressed="true"]{background:var(--lamp);color:var(--wall);border-color:var(--lamp)}
+.ic:focus-visible{outline:3px solid var(--lamp);outline-offset:2px}
+.tick{height:3px;border-radius:2px;background:var(--plan);overflow:hidden;margin-top:4px}
+.tick div{height:100%;background:var(--lamp);transform-origin:left;transform:scaleX(0)}
+.sus .mstat{color:var(--m);text-transform:none;letter-spacing:0;font-size:.74rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bag b{font-size:1.25rem}
+body{margin:0}
+.room.mroom{box-shadow:inset 0 0 0 2px rgba(127,200,255,0.70)}
+.room.here{box-shadow:inset 0 0 0 3px var(--lamp)}
+.paused .plan{filter:saturate(.5) brightness(.8)}
+.pausetag{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:3;background:var(--lamp);color:var(--wall);font-family:var(--display);font-weight:700;padding:6px 14px;border-radius:999px;pointer-events:none}
+.planwrap{position:relative;flex:0 1 auto;min-height:190px;display:flex}
+#house{aspect-ratio:380/372;max-height:100%}
+.planwrap .plan{flex:1;display:flex;align-items:center;justify-content:center;background:none;border:0;padding:0}
+#house{width:100%;height:100%;display:block;overflow:hidden;border-radius:14px}
+#house .room{cursor:pointer;outline:none}
+#house .room:focus-visible{stroke:#f3eefa;stroke-width:2}
+#house .hl{stroke:transparent}
+#house .here .hl{stroke:var(--lamp)}
+#house .nearmark{opacity:0;transition:opacity .25s;pointer-events:none}
+#house .near .nearmark{opacity:1}
+#house .plaque,#house .hl{pointer-events:none}
+#house .gbm{filter:drop-shadow(0 0 var(--gbr) #b8f27c)}
+.fig{will-change:transform}
+.fig .body.walk{animation:bob .28s ease-in-out infinite alternate}
+@keyframes bob{to{transform:translateY(-1.6px)}}
+#figL.headbang .body{transform-box:fill-box;transform-origin:50% 100%;animation:hb .3s ease-in-out infinite alternate}
+@keyframes hb{from{transform:rotate(2deg)}to{transform:rotate(-8deg) translateY(.6px)}}
+.achlist{display:flex;flex-direction:column;gap:6px}
+.ach{display:grid;grid-template-columns:28px 1fr;gap:8px;align-items:center;background:var(--wall);border-radius:10px;padding:7px 10px}
+.ach b{display:block;font-size:.88rem}.ach small{color:var(--muted);font-size:.74rem;line-height:1.3;display:block}
+.ach i{font-style:normal;font-size:1.2rem;text-align:center}
+.ach.off{opacity:.45}
+@media (prefers-reduced-motion:reduce){#figL.headbang .body{animation:none}}
+.claw{transform-box:fill-box;transform-origin:0% 100%;animation:wave 2.6s ease-in-out infinite}
+@keyframes wave{0%,60%,100%{transform:rotate(0)}70%{transform:rotate(-22deg)}80%{transform:rotate(4deg)}90%{transform:rotate(-16deg)}}
+.duck{transform-box:fill-box;transform-origin:50% 100%;animation:wob 3.2s ease-in-out infinite}
+@keyframes wob{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(6deg)}}
+.sway{transform-box:fill-box;transform-origin:50% 100%;animation:sway 5s ease-in-out infinite}
+@keyframes sway{0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(1.8deg)}}
+.steam{animation:steam 2.2s ease-in-out infinite}
+@keyframes steam{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:.9;transform:translateY(-1.5px)}}
+.smoke{animation:steam 3.4s ease-in-out infinite}
+.timmy{transform-box:fill-box;transform-origin:50% 100%;transition:transform .5s}
+.timmy.snub{transform:rotate(-10deg) scaleX(-1)}
+#bell .ring{transform-box:fill-box;transform-origin:50% 0%;animation:ring .35s ease-in-out infinite alternate}
+@keyframes ring{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
+.attic{animation:peek 7s ease-in-out infinite}
+@keyframes peek{0%,70%,100%{transform:translate(185px,33px) scale(.42)}78%,92%{transform:translate(185px,25px) scale(.42)}}
+.note{animation:note 1.4s ease-in-out infinite}.n2{animation-delay:.45s}.n3{animation-delay:.9s}
+@keyframes note{0%{opacity:0;transform:translateY(3px)}40%{opacity:1}100%{opacity:0;transform:translateY(-5px)}}
+#house .bulb{filter:drop-shadow(0 0 var(--bulb,0px) currentColor)}
+.broken .deco{transform-box:fill-box;transform-origin:20% 0;transform:rotate(9deg) translateY(3px);opacity:.75}
+.zzz{animation:zzz 2.4s ease-in-out infinite}
+@keyframes zzz{0%{opacity:0;transform:translateY(2px)}50%{opacity:1}100%{opacity:0;transform:translateY(-4px)}}
+.gbi{transform-box:fill-box;transform-origin:50% 100%;animation:gbw 3.4s ease-in-out infinite}
+@keyframes gbw{0%,80%,100%{transform:none}86%{transform:translateY(-3px) rotate(-6deg)}92%{transform:translateY(0) rotate(5deg)}}
+#house [id^="gbl-"]{transform-box:fill-box;transform-origin:50% 100%;transition:transform .35s}
+#house [id^="gbl-"].hush{transform:scaleY(.45)}
+.cloud{animation:drift 70s linear infinite}
+.c1{animation-duration:80s;animation-delay:-20s}.c2{animation-duration:110s;animation-delay:-70s}
+@keyframes drift{from{transform:translate(-40px,-22px)}to{transform:translate(420px,-22px)}}
+.c2{transform:translate(200px,-30px)}
+@keyframes drift2{from{transform:translate(-40px,-32px)}to{transform:translate(420px,-32px)}}
+.c2{animation-name:drift2}
+#fiatcar{transition:transform 1.8s ease-in}
+#fiatcar.gone{transform:translateX(150px)}
+#robo{animation:robo 48s ease-in-out infinite}
+@keyframes robo{0%,6%{transform:translate(36px,278px)}28%,34%{transform:translate(150px,278px)}40%{transform:translate(170px,278px) rotate(8deg)}44%{transform:translate(166px,278px)}62%,70%{transform:translate(330px,278px)}100%{transform:translate(36px,278px)}}
+#robo .led{animation:led 1.2s steps(2) infinite}
+@keyframes led{50%{opacity:.2}}
+.bub{animation:pop .25s ease-out}
+@keyframes pop{from{opacity:0;transform:translateY(3px)}}
+@media (prefers-reduced-motion:reduce){.gbi,.cloud,#robo,#robo .led,.bub{animation:none}}
+@media (prefers-reduced-motion:reduce){.claw,.duck,.sway,.steam,.smoke,#bell .ring,.attic,.fig .body.walk{animation:none}}
+.tok svg{width:100%;height:100%;display:block}
+.tok.l{box-shadow:0 0 0 3px rgba(255,207,122,0.45)}
+.dots{flex-wrap:wrap}
+.dots svg{width:14px;height:auto;filter:drop-shadow(0 0 3px var(--glow))}
+.bag b{display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.bag b svg{width:18px;height:auto;filter:drop-shadow(0 0 4px var(--glow))}
+.duo{display:flex;align-items:center;justify-content:center;gap:14px}
+.duo .av{display:flex;flex-direction:column;align-items:center;gap:4px;font-weight:800;font-size:.8rem;color:var(--muted)}
+.duo .av svg{width:64px;height:64px;border-radius:50%}
+.duo .mid{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-family:var(--display)}
+.duo .mid svg{width:30px;height:auto;filter:drop-shadow(0 0 6px var(--glow))}
+.tok.m,.tok.l{background:none}
+@media (prefers-reduced-motion:reduce){.bar div{transition:none}}
+
+/* Switch / alte Browser */
+.row>*{margin:0 6px 6px 0}.ctl>*+*{margin-left:4px}.top>*{margin-right:6px}
+.log p+p{margin-top:4px}.acts>*+*{margin-top:6px}.choice>*+*{margin-top:8px}.sheet>*+*{margin-top:12px}
+.spot .c i{margin-right:3px}.achlist>*+*{margin-top:6px}
+@media (min-aspect-ratio:4/3) and (min-width:800px){
+  html,body{height:100%}
+  .app{max-width:none;height:100vh;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"plan top" "plan log" "plan acts";grid-gap:10px;gap:10px;padding:8px 14px}
+  .app>*{margin:0!important}
+  .top{grid-area:top}.log{grid-area:log;height:auto;min-height:0}.acts{grid-area:acts}
+  .planwrap{grid-area:plan;height:calc(100vh - 16px);width:calc((100vh - 16px)*1.0215);min-height:0}
+  #house{width:100%;height:100%}
+  body{font-size:17px}
+}
+</style>
+
+<div class="app">
+  <div class="top">
+    <div class="clock" id="clock">09:00<small id="dayl">Tag 1</small></div>
+    <div class="sus"><span>Ms Misstrauen</span><div class="bar"><div id="susbar" style="width:0%"></div></div><div class="tick"><div id="tickbar"></div></div><span class="mstat" id="mstat">M im Büro</span></div>
+    <div class="bag" id="bag"></div>
+    <div class="ctl"><button class="ic" id="pause" aria-label="Pause" aria-pressed="false"><svg viewBox="0 0 14 14"><rect x="2" y="1" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="8.5" y="1" width="3.5" height="12" rx="1" fill="currentColor"/></svg></button><button class="ic" id="speed" aria-label="Tempo" aria-pressed="false">1×</button></div>
+  </div>
+  <div class="planwrap"><div class="plan" id="plan"></div><div class="pausetag" id="pausetag" hidden>Pause</div></div>
+  <div class="log" id="log" aria-live="polite"></div>
+  <div class="acts" id="acts"></div>
+</div>
+<div class="modal" id="modal" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+
+<script>
+var __defProp = Object.defineProperty;
+var __defProps = Object.defineProperties;
+var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
+var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __propIsEnum = Object.prototype.propertyIsEnumerable;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __spreadValues = (a, b) => {
+  for (var prop in b || (b = {}))
+    if (__hasOwnProp.call(b, prop))
+      __defNormalProp(a, prop, b[prop]);
+  if (__getOwnPropSymbols)
+    for (var prop of __getOwnPropSymbols(b)) {
+      if (__propIsEnum.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    }
+  return a;
+};
+var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const pick = (a) => a[Math.random() * a.length | 0];
+  const fmt = (t) => String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
+  const plural = (n, a, b) => n === 1 ? a : b;
+  const ROOMS = {
+    schlaf: { n: "Schlafzimmer" },
+    bad: { n: "Bad" },
+    arbeit: { n: "B\xFCro" },
+    wohn: { n: "Wohnzimmer" },
+    flur: { n: "Flur" },
+    kueche: { n: "K\xFCche" }
+  };
+  const ORDER = ["schlaf", "bad", "arbeit", "wohn", "flur", "kueche"];
+  const ADJ = { flur: ["schlaf", "bad", "arbeit", "wohn", "kueche"], wohn: ["flur", "schlaf"], schlaf: ["flur", "wohn"], kueche: ["flur"], bad: ["flur"], arbeit: ["flur"] };
+  const SPOTS = {
+    schrank: { room: "schlaf", n: "Ls Kleiderschrank", d: "hinter dem Dirndl", cap: 3, trig: {} },
+    bett: {
+      room: "schlaf",
+      n: "Unter dem Bett",
+      d: "zwischen Staubm\xE4usen",
+      cap: 2,
+      trig: { bed: 0.5 },
+      find: "M sucht nachts seine verlorene Socke unterm Bett und findet stattdessen einen Glowbie."
+    },
+    nacht: {
+      room: "schlaf",
+      n: "Ms Nachttisch",
+      d: "mutig. sehr mutig.",
+      cap: 1,
+      trig: { bed: 1, fetch: 0.6 },
+      find: "M \xF6ffnet seine Nachttischschublade. Ein Glowbie schaut ihn an. Er schaut zur\xFCck."
+    },
+    foehn: { room: "bad", n: "Hinter dem F\xF6hn", d: "M trocknet seine Haare nur mit dem Check24-Handtuch", cap: 2, trig: {} },
+    spuel: {
+      room: "bad",
+      n: "Im Sp\xFClkasten",
+      d: "wasserdicht? wahrscheinlich.",
+      cap: 1,
+      trig: { bath: 0.4 },
+      find: "Die Sp\xFClung klemmt. M greift in den Sp\xFClkasten und zieht einen tropfenden Glowbie heraus."
+    },
+    monstera: {
+      room: "wohn",
+      n: "Im Topf der Monstera",
+      d: "M gie\xDFt sie nie",
+      cap: 2,
+      trig: { water: 1 },
+      find: "M gie\xDFt zum ersten Mal in seinem Leben die Monstera. In der Erde leuchtet es. Die Monstera hat jetzt Kinder, denkt er."
+    },
+    hummer: {
+      room: "wohn",
+      n: "Bei Hummi",
+      d: "Ls Lieblingskuscheltier, h\xE4lt die Scheren dr\xFCber",
+      cap: 2,
+      trig: { sofa: 0.25 },
+      find: "M will Hummi zum Kuscheln aufs Sofa holen. Unter seinen Scheren leuchtet es. M: \u201EHat Hummi\u2026 Junge bekommen?\u201C"
+    },
+    ps: {
+      room: "wohn",
+      n: "Hinter der PlayStation",
+      d: "Ms Heiligtum. Sehr gef\xE4hrlich.",
+      cap: 1,
+      trig: { sofa: 0.55, evening: 0.8 },
+      find: "M will nur kurz eine Runde zocken. Hinter der PlayStation leuchtet es gr\xFCn. M: \u201EIst das\u2026 ein neuer Controller?\u201C"
+    },
+    timmy: { room: "schlaf", n: "Bei Timmy", d: "schaut grummelig, hat L aber sehr lieb", cap: 2, trig: {} },
+    ente: {
+      room: "bad",
+      n: "In der W\xE4rmflaschen-Ente",
+      d: "stolzer Erpel, steht auf dem Wannenrand",
+      cap: 1,
+      trig: { bath: 0.3 },
+      find: "M will die W\xE4rmflaschen-Ente auff\xFCllen. Statt Wasser gluckert ein Glowbie heraus."
+    },
+    decke: {
+      room: "wohn",
+      n: "Unter der Couchdecke",
+      d: "gem\xFCtlich, bis M sich abends einkuschelt",
+      cap: 2,
+      trig: { evening: 0.7 },
+      find: "M kuschelt sich abends in die Couchdecke. Irgendwas pikst. Irgendwas leuchtet."
+    },
+    handtuch: {
+      room: "bad",
+      n: "Hinter dem Check24-Handtuch",
+      d: "von Ms altem Arbeitgeber. Sein Heiligtum.",
+      cap: 1,
+      trig: { bath: 0.85 },
+      find: "M trocknet sich die H\xE4nde am Check24-Handtuch ab. In den Falten leuchtet es. M: \u201ESeit wann gibt es da Bonuspunkte?\u201C"
+    },
+    hummerbild: { room: "kueche", n: "Hinter dem Hummerbild", d: "ein Geschenk an L, h\xE4ngt einfach da", cap: 1, trig: {} },
+    kuehl: { room: "kueche", n: "Im K\xFChlschrank", d: "da schaut M nie rein, L kocht ja", cap: 2, trig: {} },
+    schublade: { room: "arbeit", n: "In der Schreibtischschublade", d: "M benutzt sie nie", cap: 2, trig: {} },
+    headset: {
+      room: "arbeit",
+      n: "Unterm Headset-St\xE4nder",
+      d: "riskant bei jedem Call",
+      cap: 1,
+      trig: { call: 0.4 },
+      find: "M kommt an den Schreibtisch zur\xFCck und greift nach dem Headset. Darunter sitzt ein Glowbie und hat offenbar das ganze Meeting mitgeh\xF6rt."
+    },
+    kaffee: {
+      room: "kueche",
+      n: "In der Kaffeedose",
+      d: "M trinkt sehr viel Kaffee",
+      cap: 1,
+      trig: { coffee: 0.9 },
+      find: "M l\xF6ffelt Kaffeepulver in die Maschine. Ein Glowbie plumpst mit hinein. Er ist jetzt koffeiniert."
+    },
+    gefrier: { room: "kueche", n: "Im Gefrierfach", d: "hinter den Korean-BBQ-Resten von letzter Woche", cap: 2, trig: {} },
+    schwein: {
+      room: "flur",
+      n: "Beim Schweinderl",
+      d: "Kuschelschwein, bewacht den Flur",
+      cap: 2,
+      trig: { swing: 0.4, putt: 0.35 },
+      find: "M puttet im Flur und trifft das Schweinderl. Ein Glowbie kullert heraus und bleibt genau vor dem Loch liegen."
+    },
+    golf: {
+      room: "flur",
+      n: "In Ms Golftasche",
+      d: "zwischen Holz 3 und Eisen 7",
+      cap: 2,
+      trig: { golf: 1 },
+      find: "M zieht den Driver aus der Golftasche. Mit raus fliegt ein Glowbie, in hohem Bogen. Fore!"
+    },
+    fiat: {
+      room: "flur",
+      n: "Im Handschuhfach vom Fiat",
+      d: "drau\xDFen vor der T\xFCr",
+      cap: 2,
+      trig: { drive: 0.4 },
+      find: "An der roten Ampel sucht M im Handschuhfach seine Sonnenbrille. Stattdessen grinst ihn ein Glowbie an."
+    },
+    kastl: {
+      room: "flur",
+      n: "Im Kastl",
+      d: "zwischen den Schuhen, M sucht da manchmal Schl\xFCssel",
+      cap: 2,
+      trig: { leave: 0.25, swing: 0.6 },
+      find: "M kramt im Kastl nach seinen Autoschl\xFCsseln. Zwischen den Schuhen grinst ihn ein Glowbie an."
+    },
+    monitor: {
+      room: "arbeit",
+      n: "Auf Ms Monitorkante",
+      d: "die Wildcard",
+      cap: 1,
+      trig: { work: 1 },
+      find: "M kommt zur\xFCck an den Schreibtisch. Auf seinem Monitor sitzt ein Glowbie."
+    }
+  };
+  const DISGUISE = {
+    korb: { n: "W\xE4schekorb", home: "bad", line: ["M sieht dich mit dem W\xE4schekorb und weicht ehrf\xFCrchtig aus. W\xE4sche ist dein Revier.", "M: \u201ESoll ich helfen?\u201C L: \u201ENein!\u201C Etwas zu schnell, aber er nickt nur."] },
+    pizza: { n: "Pizzakarton", home: "kueche", line: ["M schnuppert. \u201EPizza? Ohne mich?\u201C L: \u201EDer ist leer.\u201C M wirkt entt\xE4uscht, aber nicht misstrauisch.", "M: \u201EWarum tr\xE4gst du einen leeren Pizzakarton herum?\u201C L: \u201ERecycling-Workout.\u201C M nickt. Er stellt keine Fragen mehr."] }
+  };
+  const DAYS = [
+    {
+      intro: "L hat drei neue Glowbies bestellt. M hat letzte Woche gesagt: \u201ENoch mehr gr\xFCner Plastikschrott? Wirklich?\u201C Das Paket kommt heute Vormittag.",
+      m: "\u201EIch hab heute zehn Meetings. Um zw\xF6lf gibt\u2019s Essen, ja? Und heute Abend gehen wir ausw\xE4rts.\u201C",
+      deliveries: [{ t: 660, n: 3 }],
+      flags: {},
+      evening: "essen",
+      outs: [[[880, 940], 7, "post"]]
+    },
+    {
+      intro: "Heute kommt ein Paket mit zwei Glowbies. Au\xDFerdem ist heute Flohmarkt um die Ecke, und L hat da einen Stand mit Glowbies gesehen.",
+      m: "\u201EDie Monstera h\xE4ngt durch. Ich gie\xDF die heute Mittag. Gr\xFCn pflegen kann ich, siehe Golfplatz.\u201C Und abends will er in den Golfclub, mit L.",
+      deliveries: [{ t: 910, n: 2 }],
+      flea: true,
+      flags: { water: true },
+      evening: "golfclub",
+      outs: [[[830, 880], 6, "range"]]
+    },
+    {
+      intro: "Die gro\xDFe Lieferung: zwei Pakete mit je drei Glowbies. Das wird eng in der Wohnung.",
+      m: "\u201EMein Schwung im Golf muss besser werden!\u201C Um sechs will er im Flur \xFCben. Abends will er Pizza im Ofen machen.",
+      deliveries: [{ t: 620, n: 3 }, { t: 1e3, n: 3 }],
+      flags: { swing: true, oven: true },
+      outs: [[[600, 610], 3, "baecker"], [[930, 980], 6, "baumarkt"]]
+    }
+  ];
+  const EXCUSES = [
+    { mine: true, t: "\u201EGlowbies haben eine positive Energiebilanz.\u201C", p: 0.5, ok: "M: \u201EWirklich? \u2026Rechne ich nach.\u201C Er sucht sofort Strom-Spartipps und vergisst alles andere.", no: "M seufzt. \u201EDie haben nicht mal eine Batterie.\u201C" },
+    { mine: true, t: "\u201EDie w\xE4hlen FDP.\u201C", p: 0.5, ok: "M muss lachen. \u201EDann sparen sie wenigstens.\u201C Thema erledigt.", no: "M seufzt und sagt nichts. Sehr lange nichts." },
+    { mine: true, t: "\u201EDie sind unsere neuen Finanzplaner.\u201C", p: 0.5, ok: "M: \u201EUnd? Was sagen sie?\u201C L: \u201EMehr Glowbies.\u201C M lacht und gibt auf.", no: "M seufzt. \u201EDie Bilanz von denen will ich sehen.\u201C" },
+    { mine: true, ctx: "carry", t: "\u201EDie gab\u2019s gratis bei einer Cashback-Aktion.\u201C", p: 0.6, ok: "M: \u201EGratis? Dann ist es okay.\u201C Sparen schl\xE4gt alles.", no: "M seufzt. \u201ECashback hei\xDFt nicht gratis, L.\u201C" },
+    { daily: "golf", t: "\u201EHast du gesehen? Golfb\xE4lle sind gerade im Angebot!\u201C", p: 0.8, ok: "M: \u201EWo?! Welche Marke?\u201C Er ist sofort am Handy. Die Glowbies sind vergessen.", no: "M: \u201ENetter Versuch.\u201C Er seufzt." },
+    { daily: "spar", t: "\u201EIch hab einen Spartipp gelesen: 200 Euro im Jahr beim Strom!\u201C", p: 0.75, ok: "M: \u201EErz\xE4hl!\u201C Er holt sein Haushaltsbuch. L hat gewonnen.", no: "M: \u201EDen hab ich dir letzte Woche geschickt.\u201C" },
+    { mine: true, ctx: "carry", t: "\u201EDas war im Angebot!\u201C", p: 0.55, ok: "M: \u201EWie sehr im Angebot?\u201C L: \u201ESehr.\u201C M nickt anerkennend. Sparen ist gut.", no: "M seufzt. Er sagt nichts. Dann seufzt er nochmal." },
+    { mine: true, ctx: "carry", t: "\u201EDie sind ein Geschenk von einer Freundin.\u201C", p: 0.6, ok: "M: \u201EAch, nett von ihr.\u201C Er fragt zum Gl\xFCck nicht, von welcher.", no: "M seufzt tief und sagt nichts. Es ist die vierte Freundin diese Woche." },
+    { mine: true, ctx: "find", t: "\u201EDen hat Hummi dorthin transportiert.\u201C", p: 0.55, ok: "M schaut zu Hummi. Hummi schaut unschuldig zur\xFCck. M: \u201E\u2026okay.\u201C", no: "M seufzt und sagt nichts. Hummi schaut betont unauff\xE4llig weg." },
+    { mine: true, t: "\u201EIch hab halt zu viele doppelte. Schenk mir doch neue!\u201C", p: 0.5, ok: "M: \u201EMoment\u2026 hab ich dir gerade versprochen, welche zu kaufen?\u201C Er ist verwirrt, aber nicht mehr misstrauisch.", no: "M seufzt. Lange. Sehr lange. Dann sagt er nichts." },
+    { t: "\u201EDie sind zum L\xFCften. Glowbies binden Feinstaub.\u201C", p: 0.45, ok: "M nickt beeindruckt und atmet demonstrativ tief ein.", no: "M: \u201EDas hast du dir gerade ausgedacht.\u201C Hat sie." },
+    { t: "\u201EDie sind f\xFCr Timmy. Er ist einsam.\u201C", p: 0.6, ok: "M schaut zu Timmy. Timmy schaut grummelig zur\xFCck. M: \u201EOkay. Verst\xE4ndlich.\u201C", no: "M: \u201ETimmy ist ein Stofftier, L.\u201C Timmy ist beleidigt." },
+    { t: "L bleibt ganz still stehen und tut so, als w\xE4re sie eine Stehlampe.", p: 0.3, ok: "M: \u201ESch\xF6ne Lampe.\u201C Er versucht, sie anzuknipsen, und geht weiter.", no: "M: \u201ELampen schwitzen nicht, L.\u201C" },
+    { t: "\u201EWelche Figuren?\u201C", p: 0.25, ok: "M blinzelt. Er schaut auf seinen Kaffee. Vielleicht hat er sich das eingebildet.", no: "M: \u201EDie, die du in der Hand h\xE4ltst. Die leuchten.\u201C" },
+    { t: "\u201EDas ist Kunst. Das verstehst du nicht.\u201C", p: 0.45, ok: "M: \u201EStimmt.\u201C Er geht. Kunst ist nicht sein Fachgebiet.", no: "M: \u201EIch verstehe sehr wohl, dass das Nummer zw\xF6lf ist.\u201C" }
+  ];
+  const OUTS = {
+    post: { cue: "M: \u201EIch bring gleich kurz ein Paket zur Post.\u201C Ein Paket? Von M? Was ist da drin?", leave: "M zieht die Jacke an. Unterm Arm: ein verd\xE4chtig kleines Paket." },
+    einkauf: { cue: "M: \u201EIch geh gleich einkaufen. Brauchst du was?\u201C", leave: "M geht einkaufen. Auf seiner Liste steht nur \u201EKaffee\u201C, dreimal unterstrichen." },
+    baecker: { cue: "M: \u201EIch hol uns gleich Brezeln!\u201C", leave: "M geht zum B\xE4cker. Er hat einen Jutebeutel dabei. F\xFCr zwei Brezeln." },
+    range: { cue: "M: \u201EIch fahr nachher kurz auf die Driving Range. Kopf frei kriegen.\u201C", leave: "M schultert die Golftasche und f\xE4hrt mit dem Fiat zur Driving Range." },
+    baumarkt: { cue: "M: \u201EIch muss gleich in den Baumarkt. D\xFCbel.\u201C", leave: "M f\xE4hrt in den Baumarkt. Er braucht D\xFCbel. Niemand wei\xDF, wof\xFCr." }
+  };
+  const CAR = ["post", "einkauf", "baumarkt", "range", "essen", "golfclub"];
+  const FORGOT = [["mein Handy", "arbeit"], ["den Schl\xFCssel", "kueche"], ["meine Kopfh\xF6rer", "schlaf"], ["mein Portemonnaie", "wohn"], ["die Einkaufstasche", "kueche"], ["meine Brille", "bad"]];
+  const MEET = ["M: \u201EHast du meine Kopfh\xF6rer gesehen?\u201C Sie h\xE4ngen um seinen Hals.", "M: \u201EHey. Ich hab gleich wieder ein Meeting.\u201C", "M gibt L im Vorbeigehen einen Kuss auf die Stirn und murmelt \u201ETicket ist noch offen\u201C.", "M: \u201EWarum stehst du hier rum?\u201C L: \u201EIch\u2026 l\xFCfte.\u201C", "M: \u201EHaben wir noch Kaffee?\u201C Er wartet die Antwort nicht ab.", "M summt die Wartemusik aus seinem letzten Call.", "M: \u201EIst noch Bier im K\xFChlschrank?\u201C"];
+  const CUES = { coffee: ["Im Arbeitszimmer rollt ein B\xFCrostuhl zur\xFCck.", "Hinter der T\xFCr: ein tiefes Kaffee-Seufzen."], bath: ["Die Arbeitszimmert\xFCr knarzt.", "M: \u201EBin kurz weg!\u201C ruft er in sein Headset."], evening: ["Aus dem B\xFCro: \u201EHast du heute Abend schon was vor?\u201C", "M ruft: \u201EIch mach gleich Feierabend! Also\u2026 kurz.\u201C"], lunch: ["Gleich zw\xF6lf! Zeit f\xFCr L, in die K\xFCche zu gehen und zu kochen.", "Im B\xFCro knurrt h\xF6rbar ein Magen. Es ist fast zw\xF6lf."], lunchOld: ["Aus dem Arbeitszimmer: \u201EIch hab Hunger!\u201C Gleich kommt er raus."], dinner: ["Aus dem Arbeitszimmer: \u201EWas gibt\u2019s heute Abend?\u201C"], swing: ["Aus dem B\xFCro: \u201EGleich ist Schwungtraining!\u201C"], bed: ["Im Arbeitszimmer klappt ein Laptop zu. Feierabend in zehn Minuten."], out: ["Im Arbeitszimmer klappert ein Schl\xFCsselbund."] };
+  const AV = {
+    L: `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#ffcf7a"/><path d="M5 40 Q7 31 20 31 Q33 31 35 40Z" fill="#ff7d8e"/><circle cx="8.8" cy="27" r="1.3" fill="#fff"/><circle cx="31.2" cy="27" r="1.3" fill="#fff"/><circle cx="20" cy="7" r="5.5" fill="#f0cf6e"/><circle cx="20" cy="23" r="11.5" fill="#f2c9a8"/><path d="M8.5 22 Q8 10 20 10 Q32 10 31.5 22 Q28 15 20 15.5 Q12 15 8.5 22Z" fill="#f0cf6e"/><circle cx="16" cy="23" r="1.4" fill="#2a2235"/><circle cx="24" cy="23" r="1.4" fill="#2a2235"/><path d="M17 27.5 q3 2.4 6 0" stroke="#2a2235" stroke-width="1.4" fill="none" stroke-linecap="round"/><circle cx="13" cy="26" r="1.8" fill="#ff9fb4" opacity=".6"/><circle cx="27" cy="26" r="1.8" fill="#ff9fb4" opacity=".6"/></svg>`,
+    M: `<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#7fc8ff"/><path d="M5 40 Q7 31 20 31 Q33 31 35 40Z" fill="#4b567a"/><path d="M17 33 l3 4 3 -4" stroke="#eef3fb" stroke-width="1.2" fill="none"/><circle cx="20" cy="23" r="11.5" fill="#e8bd98"/><path d="M8.6 20 Q9 10 20 10.5 Q31 10 31.4 20 Q27 16 24 17 Q20 14 16 17 Q12 16 8.6 20Z" fill="#e6c25c"/><circle cx="15.5" cy="23" r="1" fill="#2a2235"/><circle cx="24.5" cy="23" r="1" fill="#2a2235"/><path d="M17.5 28.6 h5" stroke="#2a2235" stroke-width="1.4" stroke-linecap="round"/><path d="M7.5 24 Q7 8 20 8 Q33 8 32.5 24" stroke="#22263a" stroke-width="2" fill="none"/><rect x="5.5" y="21" width="4" height="7" rx="2" fill="#22263a"/><path d="M8 27 Q9 31 14 31" stroke="#22263a" stroke-width="1.4" fill="none"/></svg>`
+  };
+  const GB = `<svg viewBox="0 0 24 30" aria-hidden="true"><path d="M12 9 Q11 5 14 3" stroke="#b8f27c" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="14.3" cy="2.8" r="2" fill="#b8f27c"/><path d="M12 9 C19 9 21 15 20.5 21 C20 27 17 29 12 29 C7 29 4 27 3.5 21 C3 15 5 9 12 9Z" fill="#b8f27c"/><circle cx="9.6" cy="18" r="1.3" fill="#1d1a2b"/><circle cx="14.4" cy="18" r="1.3" fill="#1d1a2b"/><path d="M10.5 21.6 q1.5 1.2 3 0" stroke="#1d1a2b" stroke-width="1" fill="none" stroke-linecap="round"/></svg>`;
+  const GBP = `<path d="M12 9 Q11 5 14 3" stroke="#b8f27c" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="14.3" cy="2.8" r="2" fill="#b8f27c"/><path d="M12 9 C19 9 21 15 20.5 21 C20 27 17 29 12 29 C7 29 4 27 3.5 21 C3 15 5 9 12 9Z" fill="#b8f27c"/><circle cx="9.6" cy="18" r="1.4" fill="#1d1a2b"/><circle cx="14.4" cy="18" r="1.4" fill="#1d1a2b"/><path d="M10.5 21.6 q1.5 1.2 3 0" stroke="#1d1a2b" stroke-width="1" fill="none" stroke-linecap="round"/>`;
+  const SCENE = {
+    schlaf: `<ellipse cx="62" cy="72" rx="44" ry="6" fill="#4b3a5c"/>
+    <rect x="3" y="8" width="18" height="60" rx="2" fill="#7d5847"/><path d="M12 10 v56" stroke="#5e4136" stroke-width="1.2"/><circle cx="10" cy="38" r="1.2" fill="#e6c25c"/><circle cx="14" cy="38" r="1.2" fill="#e6c25c"/>
+    <rect x="24" y="24" width="8" height="44" rx="3" fill="#7d5847"/>
+    <rect x="28" y="40" width="66" height="24" rx="4" fill="#6b4b3e"/>
+    <rect x="30" y="34" width="62" height="20" rx="6" fill="#8fa8e8"/><rect x="54" y="34" width="38" height="20" rx="5" fill="#a9bdf2"/>
+    <g fill="#d6e0ff"><circle cx="62" cy="40" r="1.5"/><circle cx="72" cy="46" r="1.5"/><circle cx="82" cy="40" r="1.5"/><circle cx="66" cy="50" r="1.5"/><circle cx="86" cy="49" r="1.5"/></g>
+    <rect x="32" y="30" width="20" height="10" rx="5" fill="#f3eefa"/>
+    <g class="timmy">
+      <circle cx="75.5" cy="46.5" r="2.4" fill="#86c27a"/><circle cx="87.5" cy="46.5" r="2.4" fill="#86c27a"/>
+      <ellipse cx="81" cy="40" rx="9.5" ry="7.5" fill="#5f9e6c"/>
+      <path d="M74 39 l4 -4 h6 l4 4 -4 4 h-6z" fill="none" stroke="#7fbf86" stroke-width="1.1"/>
+      <path d="M72.5 42.5 q8.5 4 17 0" stroke="#d6e8c9" stroke-width=".8" stroke-dasharray="1.4 1.2" fill="none"/>
+      <circle cx="92" cy="40.5" r="4.6" fill="#a2d48e"/>
+      <path d="M89.6 37.6 l2 1 M95.2 37.4 l-2 1.1" stroke="#2a2235" stroke-width="1" stroke-linecap="round"/>
+      <circle cx="90.8" cy="39.6" r=".8" fill="#2a2235"/><circle cx="93.8" cy="39.5" r=".8" fill="#2a2235"/>
+      <path d="M90.6 43 q1.6 -1.3 3.2 0" stroke="#2a2235" stroke-width=".9" fill="none" stroke-linecap="round"/>
+      <path d="M71.8 40.5 l-2 .8" stroke="#86c27a" stroke-width="1.6" stroke-linecap="round"/>
+    </g><g id="tbub" style="display:none"><rect x="80" y="16" width="34" height="10" rx="4.5" fill="#f3eefa"/><path d="M92 25.6 l-3 4.4 6 -4.4z" fill="#f3eefa"/><text id="tbubt" x="97" y="23.2" font-size="6" text-anchor="middle" fill="#2a2235" font-family="Fredoka,sans-serif" font-weight="700">Hallo L!</text></g>
+    <rect x="97" y="42" width="18" height="24" rx="2" fill="#7d5847"/><path d="M99 52 h14" stroke="#5e4136" stroke-width="1.2"/><circle cx="106" cy="48" r="1" fill="#e6c25c"/>
+    <rect x="104" y="34" width="4" height="8" fill="#c9a24a"/><path d="M99 34 l4 -10 h6 l4 10z" fill="#ffcf7a"/><circle cx="106" cy="28" r="12" fill="#ffcf7a" opacity=".16"/>
+    <path d="M70 68 h6 v5 q0 3 -3 3 h-7 q-2 0 -2 -2 q0 -2 2 -2 h4z" fill="#e8453c"/><path d="M70 70 h6" stroke="#fff" stroke-width="1"/>`,
+    bad: `<rect x="76" y="6" width="3" height="10" fill="#9aa6c4"/><path d="M72 16 h12 l-2 10 h-8z" fill="#ff7d8e"/><path d="M75 18 v6 M78 18 v6 M81 18 v6" stroke="#fff" stroke-width="1"/>
+    <path d="M60 8 h10 q4 0 4 4 v2 h-6 l-2 8 h-4 l1 -8 h-3 q-3 0 -3 -3 q0 -3 3 -3z" fill="#c9a2ff"/>
+    <g fill="#fff" opacity=".9"><circle cx="16" cy="35" r="4"/><circle cx="23" cy="32" r="5"/><circle cx="31" cy="35" r="3.5"/><circle cx="38" cy="33" r="3"/><circle cx="20" cy="27" r="2"/></g>
+    <path d="M6 40 h66 v8 a16 16 0 0 1 -16 16 h-34 a16 16 0 0 1 -16 -16z" fill="#eef3fb"/><rect x="4" y="37" width="70" height="5" rx="2.5" fill="#fff"/>
+    <circle cx="14" cy="66" r="3" fill="#c9a24a"/><circle cx="64" cy="66" r="3" fill="#c9a24a"/>
+    <path d="M66 37 v-9 h-6" stroke="#9aa6c4" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M1 12 h14" stroke="#9aa6c4" stroke-width="1.6" stroke-linecap="round"/><path d="M2 12 h12 v20 q-6 3 -12 0z" fill="#1f5fd1"/><path d="M2 26 h12" stroke="#fff" stroke-width="1.6"/><path d="M2 29 h12" stroke="#7fb0ff" stroke-width=".8"/>
+    <g class="duck"><path d="M39 37 q-2 -7 2 -12 q3 -3 7 -1 q4 3 2 9 q-1 4 -5 4z" fill="#b5b9bf"/><path d="M40.5 30 q2 -5 7 -4 q2 1 2 4 q-2 3 -6 3 q-3 0 -3 -3z" fill="#8a5a3c"/><path d="M41 26.5 q3 -1.2 6.6 .6" stroke="#fff" stroke-width="1.4" fill="none"/><circle cx="44.5" cy="20.5" r="5" fill="#2f7d4f"/><path d="M48.6 20.4 l5 .8 -5 2z" fill="#f2c94c"/><circle cx="46" cy="19.4" r=".9" fill="#1d1a2b"/><path d="M40 21 q1.6 -1 3 0" stroke="#3f9a63" stroke-width=".8" fill="none"/><rect x="42.6" y="14.2" width="3.6" height="2.6" rx=".8" fill="#e6e0d6"/><path d="M42 37 h2 M46 37 h2" stroke="#ff8c2a" stroke-width="1.6" stroke-linecap="round"/><path d="M38.6 31 q-2.6 1 -2.4 4" stroke="#6b7078" stroke-width="1" fill="none"/></g>
+    <rect x="94" y="22" width="20" height="14" rx="2" fill="#eef3fb"/><rect x="101" y="19" width="6" height="3" rx="1" fill="#c8d2e4"/>
+    <path d="M90 38 h28 q0 14 -10 16 v10 h-8 v-10 q-10 -2 -10 -16z" fill="#eef3fb"/><rect x="89" y="36" width="30" height="4" rx="2" fill="#fff"/>
+    <rect x="80" y="44" width="7" height="8" rx="3" fill="#fff"/><rect x="80" y="44" width="3" height="8" rx="1.5" fill="#e3e8f2"/>`,
+    arbeit: `<g transform="rotate(-6 14 14)"><rect x="6" y="6" width="14" height="14" fill="#ffe27a"/><path d="M8 11 h10 M8 15 h7" stroke="#8a6a00" stroke-width="1"/></g>
+    <g transform="rotate(5 26 12)"><rect x="20" y="4" width="12" height="12" fill="#ff9fb4"/><path d="M22 9 h8 M22 12 h6" stroke="#8a3a50" stroke-width="1"/></g>
+    <rect x="34" y="14" width="40" height="27" rx="3" fill="#2b3247" stroke="#9aa6c4" stroke-width="1.5"/>
+    <g stroke-width="2" stroke-linecap="round"><path d="M39 20 h12" stroke="#7fc8ff"/><path d="M42 25 h18" stroke="#b8f27c"/><path d="M42 30 h10" stroke="#ff9fb4"/><path d="M39 35 h22" stroke="#7fc8ff"/></g>
+    <path d="M54 41 v5 M46 46 h16" stroke="#9aa6c4" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M22 47 v-9 M18 47 h8" stroke="#9aa6c4" stroke-width="1.4"/><path d="M17 40 q5 -9 10 0" stroke="#22263a" stroke-width="2" fill="none"/><rect x="15.5" y="39" width="3" height="5" rx="1.2" fill="#22263a"/><rect x="25.5" y="39" width="3" height="5" rx="1.2" fill="#22263a"/>
+    <rect x="4" y="47" width="90" height="5" rx="1.5" fill="#8a6a4f"/><rect x="60" y="52" width="24" height="10" rx="1" fill="#7a5c43"/><rect x="69" y="56" width="6" height="1.6" rx=".8" fill="#e6c25c"/><path d="M10 52 v22 M88 52 v22" stroke="#6b4b3e" stroke-width="3"/>
+    <g id="cups"></g>
+    <rect x="96" y="30" width="18" height="22" rx="4" fill="#3d4766"/><rect x="94" y="50" width="22" height="6" rx="3" fill="#4b567a"/><path d="M105 56 v10 M97 70 l8 -4 8 4" stroke="#9aa6c4" stroke-width="2" fill="none"/><circle cx="97" cy="71" r="2" fill="#9aa6c4"/><circle cx="113" cy="71" r="2" fill="#9aa6c4"/>`,
+    wohn: `<rect x="6" y="-14" width="40" height="23" rx="1.5" fill="#1d1a2b" stroke="#3a3f52" stroke-width="1.2"/><rect id="tvscr" x="8" y="-12" width="36" height="19" fill="#2b3247"/><g id="tvpitch" style="display:none"><rect x="10" y="-10" width="32" height="15" fill="none" stroke="#e9f5e9" stroke-width=".6"/><path d="M26 -10 v15" stroke="#e9f5e9" stroke-width=".6"/><circle cx="26" cy="-2.5" r="2.4" fill="none" stroke="#e9f5e9" stroke-width=".6"/><circle cx="31" cy="0" r=".9" fill="#fff"/></g><path d="M10 -10 l8 6 M14 -10 l10 8" stroke="#3d4766" stroke-width="1.2"/><rect x="8" y="11" width="36" height="3" rx="1" fill="#8a6a4f"/><rect x="16" y="5.5" width="18" height="5" rx="1.5" fill="#f3eefa"/><path d="M16 8 h18" stroke="#c8d2e4" stroke-width=".6"/><circle cx="31" cy="8" r=".6" fill="#7fc8ff"/><g transform="translate(37 6)"><path d="M0 2 q0 -3 3 -3 h4 q3 0 3 3 q0 2 -2 2 l-1 -1 h-4 l-1 1 q-2 0 -2 -2z" fill="#22263a"/><circle cx="7.4" cy="1" r=".6" fill="#ff7d8e"/></g>
+    <ellipse cx="54" cy="73" rx="44" ry="6" fill="#4b3a5c"/>
+    <rect x="12" y="30" width="66" height="18" rx="7" fill="#d98270"/>
+    <rect x="6" y="44" width="78" height="16" rx="5" fill="#c76b5a"/><rect x="4" y="36" width="10" height="24" rx="4" fill="#b85d4d"/><path d="M2 34 q8 -3 16 1 l-1 20 q-4 3 -8 0 q-4 3 -7 0z" fill="#e3c06a"/><path d="M4 40 h12 M3.5 46 h12 M3 52 h13" stroke="#c9a24a" stroke-width="1" stroke-dasharray="2 1.4"/><rect x="76" y="36" width="10" height="24" rx="4" fill="#b85d4d"/>
+    <path d="M45 46 v12" stroke="#a9503f" stroke-width="1.2"/><path d="M10 60 v5 M80 60 v5" stroke="#6b4b3e" stroke-width="3"/>
+    <rect x="16" y="34" width="14" height="12" rx="4" fill="#ffcf7a" transform="rotate(-10 23 40)"/><g transform="translate(43 41) rotate(8)"><rect width="8" height="6" rx=".8" fill="#fffbe8"/><path d="M0 0 h8" stroke="#ff7d8e" stroke-width="1"/><path d="M1.5 2.6 q1 -1 2 0 t2 0 M1.6 4.4 q.8 .8 1.6 0" stroke="#e8453c" stroke-width=".55" fill="none"/></g><g transform="translate(28 38)"><rect x="0" y="0" width="13" height="1.6" rx=".6" fill="#b9c3cf"/><path d="M1.5 0 l1.6 -8 h9 l-1.4 8z" fill="#9aa6c4"/><path d="M3.6 -6.6 h7.4 l-1 5.6 h-7.4z" fill="#9fd3ff" opacity=".8"/></g>
+    <g><path d="M60 26 l-3 -7 M66 26 l3 -7" stroke="#e8453c" stroke-width="1.2" fill="none"/><circle cx="57" cy="19" r="1.6" fill="#1d1a2b"/><circle cx="69" cy="19" r="1.6" fill="#1d1a2b"/>
+      <ellipse cx="63" cy="36" rx="8" ry="10" fill="#e8453c"/><path d="M56 40 h14 M57 44 h12" stroke="#c7322b" stroke-width="1"/><g id="trikot" style="display:none"><path d="M55.4 33 q7.6 -3 15.2 0 l2.4 4 -2.6 1.6 v6.4 q-7.4 3 -14.8 0 v-6.4 l-2.6 -1.6z" fill="#1d4f91"/><path d="M58 32.4 v13 M63 31.6 v14.6 M68 32.4 v13" stroke="#f3eefa" stroke-width="1.3"/><path d="M60.5 31.8 q2.5 2.2 5 0" stroke="#1d1a2b" stroke-width="1.4" fill="none"/></g>
+      <path d="M56 32 q-6 -2 -7 -8" stroke="#e8453c" stroke-width="2.5" fill="none"/><circle cx="48" cy="22" r="4.5" fill="#e8453c"/><path d="M46 19 l3 3" stroke="#d98270" stroke-width="1.6"/>
+      <g class="claw"><path d="M70 32 q6 -2 7 -8" stroke="#e8453c" stroke-width="2.5" fill="none"/><circle cx="78" cy="22" r="4.5" fill="#e8453c"/><path d="M80 19 l-3 3" stroke="#d98270" stroke-width="1.6"/></g>
+      <circle cx="60" cy="31" r="1.3" fill="#1d1a2b"/><circle cx="66" cy="31" r="1.3" fill="#1d1a2b"/><path d="M60.5 35 q2.5 2 5 0" stroke="#1d1a2b" stroke-width="1" fill="none"/>
+      <path d="M58 46 l-3 4 M63 46 v5 M68 46 l3 4" stroke="#e8453c" stroke-width="2.4" stroke-linecap="round"/></g>
+    <path d="M94 74 h16 l-2 -14 h-12z" fill="#c9a24a"/>
+    <g class="sway"><g fill="#4f9a5a"><ellipse cx="94" cy="44" rx="9" ry="6" transform="rotate(-30 94 44)"/><ellipse cx="110" cy="40" rx="9" ry="6" transform="rotate(35 110 40)"/><ellipse cx="102" cy="30" rx="7" ry="9"/><ellipse cx="96" cy="56" rx="7" ry="4.5" transform="rotate(-15 96 56)"/></g>
+    <path d="M102 60 v-30 M102 50 l-8 -6 M102 46 l8 -6" stroke="#3a7a45" stroke-width="1.5" fill="none"/><path d="M90 42 l4 2 M113 38 l-3 3 M100 26 l2 3" stroke="#2a2540" stroke-width="1.2"/></g>`,
+    flur: `<rect x="40" y="4" width="32" height="56" rx="2" fill="#8a6a4f"/><rect x="44" y="9" width="24" height="18" rx="1.5" fill="#7a5c43"/><rect x="44" y="31" width="24" height="24" rx="1.5" fill="#7a5c43"/>
+    <circle cx="67" cy="33" r="2" fill="#e6c25c"/><circle cx="56" cy="15" r="1.4" fill="#2a2540"/>
+    <rect x="37" y="61" width="38" height="9" rx="2" fill="#a6824f"/><text x="56" y="68" text-anchor="middle" font-family="Nunito,sans-serif" font-size="6" font-weight="800" fill="#5e4136">HALLO</text>
+    <path d="M86 8 h26" stroke="#8a6a4f" stroke-width="2"/><circle cx="92" cy="9" r="1.5" fill="#e6c25c"/><circle cx="106" cy="9" r="1.5" fill="#e6c25c"/>
+    <path d="M86 10 h12 l4 26 h-20z" fill="#ffd23f"/><path d="M92 10 v26" stroke="#e6b400" stroke-width="1"/>
+    <g id="golfbag"><path d="M77 30 l-2 -8 M80 30 l1 -9 M83 30 l3 -7" stroke="#b9c3cf" stroke-width="1.2"/><rect x="73.5" y="20" width="4" height="2.6" rx="1" fill="#9aa6c4"/><rect x="79.5" y="19" width="4" height="2.6" rx="1" fill="#9aa6c4"/><rect x="85" y="21" width="4" height="2.6" rx="1" fill="#9aa6c4"/><rect x="74" y="29" width="12" height="32" rx="4" fill="#3a7a45"/><rect x="74" y="36" width="12" height="3" fill="#2f6638"/><rect x="74" y="50" width="12" height="3" fill="#2f6638"/><rect x="85" y="38" width="3" height="10" rx="1.5" fill="#2f6638"/></g>
+    <rect x="3" y="44" width="30" height="24" rx="2" fill="#6b4b3e"/><path d="M3 56 h30" stroke="#5e4136" stroke-width="1.5"/>
+    <path d="M6 44 q0 -6 6 -6 h3 l3 3 v3z" fill="#7fc8ff"/><path d="M19 44 q0 -6 6 -6 h3 l3 3 v3z" fill="#7fc8ff"/><path d="M6 44 h12 M19 44 h12" stroke="#fff" stroke-width="1.5"/>
+    <path d="M8 36 l10 6 M18 34 l-6 9 M5 40 l18 0" stroke="#d8d2e6" stroke-width=".6" opacity=".8"/>
+    <g id="pig"><ellipse cx="100" cy="72" rx="12" ry="2.6" fill="#2a2540" opacity=".5"/>
+    <ellipse cx="100" cy="63" rx="11" ry="9" fill="#ffb3c4"/><circle cx="108" cy="58" r="7" fill="#ffc2cf"/><path d="M103 52 l1 -4 3 3z M110 51 l2 -4 2 4z" fill="#ff9fb4"/>
+    <ellipse cx="112.5" cy="60" rx="3.2" ry="2.4" fill="#ff8fa8"/><circle cx="111.5" cy="60" r=".6" fill="#b85d6d"/><circle cx="113.6" cy="60" r=".6" fill="#b85d6d"/>
+    <circle cx="106" cy="56.5" r=".9" fill="#1d1a2b"/><circle cx="110" cy="56" r=".9" fill="#1d1a2b"/><path d="M89 61 q-3 -2 -2 -5 q1 2 3 2" stroke="#ff9fb4" stroke-width="1.2" fill="none"/>
+    <path d="M93 71 v-3 M99 71 v-3 M104 71 v-3" stroke="#ffb3c4" stroke-width="3" stroke-linecap="round"/><path d="M95 62 q4 3 8 0" stroke="#ff9fb4" stroke-width=".8" fill="none" stroke-dasharray="1 1"/></g>`,
+    kueche: `<rect x="6" y="6" width="24" height="12" rx="2" fill="#5e4a63"/><rect x="34" y="6" width="24" height="12" rx="2" fill="#5e4a63"/>
+    <rect x="3" y="38" width="66" height="4" rx="1" fill="#9b8e7e"/><rect x="5" y="42" width="62" height="28" fill="#e6e0d6"/>
+    <rect x="9" y="47" width="28" height="19" rx="2" fill="#2b3247"/><rect x="13" y="51" width="20" height="11" rx="1.5" fill="#ff9a5c" opacity=".25"/><path d="M11 45 h24" stroke="#9aa6c4" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M42 46 v20 M44 56 h3" stroke="#c8bfb2" stroke-width="1.2"/>
+    <ellipse cx="16" cy="37" rx="6" ry="1.5" fill="#3a3a4a"/>
+    <rect x="9" y="26" width="15" height="11" rx="2" fill="#9aa6c4"/><rect x="8" y="24" width="17" height="3" rx="1.5" fill="#b9c3cf"/><circle cx="16.5" cy="23" r="1.4" fill="#b9c3cf"/>
+    <path class="steam" d="M13 21 q-2 -3 0 -6 M18 20 q-2 -3 0 -6" stroke="#a79fbe" stroke-width="1.1" fill="none"/>
+    <rect x="30" y="26" width="10" height="12" rx="1" fill="#ffd27a"/><text x="35" y="34" text-anchor="middle" font-family="Nunito,sans-serif" font-size="3.6" font-weight="800" fill="#7a5c20">HAFER</text>
+    <rect x="44" y="28" width="12" height="10" rx="2" fill="#c7322b"/><rect x="44" y="27" width="12" height="2.5" rx="1" fill="#e8453c"/><text x="50" y="35" text-anchor="middle" font-family="Nunito,sans-serif" font-size="3.4" font-weight="800" fill="#fff">KAFFEE</text>
+    <rect x="61" y="0" width="16" height="14" rx="1" fill="#c9a24a"/><rect x="62.5" y="1.5" width="13" height="11" fill="#cfe9f2"/><ellipse cx="69" cy="8" rx="2.4" ry="3.2" fill="#e8453c"/><path d="M67 5.5 q-2 -1 -2.6 -3 M71 5.5 q2 -1 2.6 -3" stroke="#e8453c" stroke-width="1.2" fill="none"/><circle cx="64.4" cy="2.6" r="1.2" fill="#e8453c"/><circle cx="73.6" cy="2.6" r="1.2" fill="#e8453c"/>
+    <path d="M104 6 v-7 q0 -2 2 -3 v-3 h2 v3 q2 1 2 3 v7z" fill="#ff7a1a"/><rect x="104.6" y="-1" width="4.8" height="3" fill="#fff4e0"/>
+    <rect x="80" y="6" width="34" height="64" rx="4" fill="#eef3fb"/><path d="M80 28 h34" stroke="#c8d2e4" stroke-width="1.5"/><path d="M84 14 v8 M84 34 v14" stroke="#9aa6c4" stroke-width="2.4" stroke-linecap="round"/>
+    <circle cx="100" cy="14" r="2.2" fill="#ff7d8e"/><circle cx="106" cy="19" r="2" fill="#7fc8ff"/><rect x="94" y="36" width="14" height="16" fill="#fff" transform="rotate(4 101 44)"/><path d="M96 41 h9 M96 45 h7 M96 49 h8" stroke="#a79fbe" stroke-width="1" transform="rotate(4 101 44)"/>`
+  };
+  const SLEEPERS = `<g id="sleepL" style="display:none"><circle cx="42" cy="31" r="5.2" fill="#f2c9a8"/><path d="M36.6 31 q-.4 -6.6 5.4 -6.8 q5.8 .2 5.4 6.8 q-2 -3.4 -5.4 -3.4 q-3.4 0 -5.4 3.4z" fill="#f0cf6e"/><circle cx="37" cy="25.4" r="2.6" fill="#f0cf6e"/><path d="M39.4 31.6 q1 .8 2 0 M43 31.6 q1 .8 2 0" stroke="#2a2235" stroke-width=".6" fill="none"/><path d="M40 35 q2.4 -1 4.8 0 q8 -3 16 0 q8 -3 16 0" stroke="#7d93d0" stroke-width="1" fill="none"/><ellipse cx="62" cy="40" rx="17" ry="5" fill="#a9bdf2" opacity=".9"/><text class="zzz" x="50" y="22" font-family="Fredoka,sans-serif" font-weight="700" font-size="6" fill="#c9a2ff">Zzz</text></g>
+<g id="sleepM" style="display:none"><circle cx="42" cy="31" r="5.2" fill="#e8bd98"/><path d="M36.6 31 q-.6 -6.8 4.6 -7 l1 -2 1.4 2 1.8 -1.4 .6 1.8 q3.2 1.6 2.6 6.6 q-2 -3 -5 -3 q-3.4 0 -5.6 3z" fill="#e6c25c"/><path d="M39.4 31.6 q1 .8 2 0 M43 31.6 q1 .8 2 0" stroke="#2a2235" stroke-width=".6" fill="none"/><path d="M41 34.4 q1 .5 2 0" stroke="#2a2235" stroke-width=".5" fill="none"/><ellipse cx="62" cy="40" rx="17" ry="5.4" fill="#a9bdf2" opacity=".9"/><text class="zzz" x="50" y="22" font-family="Fredoka,sans-serif" font-weight="700" font-size="6" fill="#7fc8ff">Zzz</text></g>`;
+  SCENE.schlaf += SLEEPERS;
+  const SPOTPOS = {
+    schrank: [12, 30],
+    bett: [48, 72],
+    nacht: [109, 42],
+    timmy: [68, 36],
+    foehn: [66, 30],
+    spuel: [104, 20],
+    ente: [36, 30],
+    monitor: [50, 14],
+    kissen: [34, 46],
+    monstera: [102, 62],
+    decke: [14, 38],
+    hummer: [73, 42],
+    ps: [26, 4],
+    kuehl: [97, 52],
+    handtuch: [7, 24],
+    hummerbild: [69, 6],
+    schublade: [72, 58],
+    headset: [26, 42],
+    kaffee: [50, 26],
+    hafer: [30, 26],
+    ofen: [23, 64],
+    gefrier: [97, 30],
+    kastl: [16, 56],
+    schwein: [100, 56],
+    golf: [80, 32]
+  };
+  const RW = 116, RH = 116, GXS = [12, 132, 252], GYS = [44, 164];
+  const RPOS = { schlaf: [0, 0], bad: [1, 0], arbeit: [2, 0], wohn: [0, 1], flur: [1, 1], kueche: [2, 1] };
+  const ox = (r) => GXS[RPOS[r][0]], oy = (r) => GYS[RPOS[r][1]];
+  const SCX = 4, SCY = 37, SCS = 0.92, FEET = 109;
+  const WALL = { schlaf: "#6d5a86", bad: "#5c7b96", arbeit: "#3b4766", wohn: "#8a5d58", flur: "#5b4a72", kueche: "#4c6d68" };
+  const FLOOR = { schlaf: "wood", bad: "tile", arbeit: "wood", wohn: "wood", flur: "wood", kueche: "tile" };
+  const LABEL = { schlaf: "Schlafen", bad: "Bad", arbeit: "B\xFCro", wohn: "Wohnen", flur: "Flur", kueche: "K\xFCche" };
+  const WIN = { schlaf: ["rect", 40, 12, 32, 22], wohn: ["rect", 64, 10, 30, 22], kueche: ["rect", 60, 10, 28, 20], arbeit: ["rect", 68, 10, 30, 22], bad: ["circ", 30, 22, 10] };
+  const PEND = { wohn: 58, kueche: 40, bad: 60, flur: 28 };
+  const POOL = { schlaf: [101, 62, 44], wohn: [58, 62, 54], kueche: [40, 62, 50], bad: [60, 62, 50], flur: [30, 60, 46], arbeit: [52, 58, 40] };
+  const shade = (hex, f) => {
+    const n = parseInt(hex.slice(1), 16);
+    const c = [n >> 16, n >> 8 & 255, n & 255].map((v) => Math.max(0, Math.min(255, Math.round(v * f))));
+    return "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+  };
+  const lerpHex = (a, b, t) => {
+    const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
+    const c = [16, 8, 0].map((s) => Math.round((A >> s & 255) * (1 - t) + (B >> s & 255) * t));
+    return "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+  };
+  const SKY = [[540, "#9fd3ff"], [960, "#a8d8ff"], [1080, "#ffb27a"], [1170, "#7a5a9a"], [1260, "#1d1c48"], [1400, "#121233"]];
+  function skyAt(t) {
+    for (let i = 1; i < SKY.length; i++) {
+      if (t <= SKY[i][0]) {
+        const [a, ca] = SKY[i - 1], [b, cb] = SKY[i];
+        return lerpHex(ca, cb, Math.max(0, (t - a) / (b - a)));
+      }
+    }
+    return SKY[SKY.length - 1][1];
+  }
+  function nightAt(t) {
+    return Math.max(0, Math.min(1, (t - 1050) / 240));
+  }
+  const FIG_L = `<ellipse cx="0" cy="0" rx="8" ry="2.2" fill="#000" opacity=".28"/>
+ <g class="body">
+ <rect x="-4.6" y="-13" width="3.8" height="13" rx="1.9" fill="#3b4a7a"/><rect x=".8" y="-13" width="3.8" height="13" rx="1.9" fill="#3b4a7a"/>
+ <ellipse cx="-2.7" cy="-.6" rx="2.6" ry="1.4" fill="#fff"/><ellipse cx="2.7" cy="-.6" rx="2.6" ry="1.4" fill="#fff"/>
+ <path d="M-7 -12 Q-8 -26 0 -26 Q8 -26 7 -12Z" fill="#ff7d8e"/><path d="M-3 -25 q3 2 6 0" stroke="#fff" stroke-width=".9" fill="none"/>
+ <path d="M-6.4 -23 Q-10.5 -18 -8.6 -13" stroke="#f2c9a8" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M6.4 -23 Q10.5 -18 8.6 -13" stroke="#f2c9a8" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+ <circle cx="0" cy="-33" r="7.4" fill="#f2c9a8"/>
+ <path d="M-7.9 -32 Q-8.6 -42 0 -42 Q8.6 -42 7.9 -32 Q6 -37 1 -37.5 Q-5 -37 -7.9 -32Z" fill="#f0cf6e"/><circle cx="0" cy="-44" r="3.8" fill="#f0cf6e"/><path d="M-2.5 -41.5 q2.5 -1.5 5 0" stroke="#d9b44f" stroke-width=".8" fill="none"/>
+ <circle cx="-2.6" cy="-32.5" r="1" fill="#2a2235"/><circle cx="2.6" cy="-32.5" r="1" fill="#2a2235"/>
+ <path d="M-1.8 -29.6 q1.8 1.4 3.6 0" stroke="#2a2235" stroke-width=".9" fill="none" stroke-linecap="round"/>
+ <circle cx="-5" cy="-30.5" r="1.4" fill="#ff9fb4" opacity=".7"/><circle cx="5" cy="-30.5" r="1.4" fill="#ff9fb4" opacity=".7"/>
+ <circle cx="-7.3" cy="-31" r=".9" fill="#fff"/><circle cx="7.3" cy="-31" r=".9" fill="#fff"/>
+ <path id="Lsweat" style="display:none" d="M9 -40 q-2.4 3.4 0 4.6 q2.4 -1.2 0 -4.6z" fill="#9fd3ff"/>
+ <g id="Lcarry" transform="translate(10 -14)"></g>
+ </g>`;
+  const FIG_M = `<ellipse cx="0" cy="0" rx="8.5" ry="2.3" fill="#000" opacity=".28"/>
+ <g class="body">
+ <rect x="-4.8" y="-15" width="4" height="15" rx="2" fill="#3d5a8a"/><rect x=".8" y="-15" width="4" height="15" rx="2" fill="#3d5a8a"/>
+ <ellipse cx="-2.8" cy="-.6" rx="2.8" ry="1.4" fill="#e9e3d6"/><ellipse cx="2.8" cy="-.6" rx="2.8" ry="1.4" fill="#e9e3d6"/>
+ <path d="M-8 -13 Q-9 -29 0 -29 Q9 -29 8 -13Z" fill="#4b567a"/><path d="M-4 -19 h8 v4 h-8z" fill="#424c6c"/><path d="M-1.6 -28 v5 M1.6 -28 v5" stroke="#eef3fb" stroke-width=".8"/>
+ <path d="M-7.2 -26 Q-11.5 -20 -9.6 -14" stroke="#4b567a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M7.2 -26 Q11.5 -20 9.6 -14" stroke="#4b567a" stroke-width="3" fill="none" stroke-linecap="round"/>
+ <circle cx="-9.6" cy="-13.4" r="1.5" fill="#e8bd98"/><circle cx="9.6" cy="-13.4" r="1.5" fill="#e8bd98"/>
+ <circle cx="0" cy="-36" r="7.6" fill="#e8bd98"/>
+ <path d="M-8 -35 Q-9 -45 -2 -45.5 L-.5 -48 L1.5 -45.5 L4 -47.5 L5 -45 Q9 -43.5 8 -35 Q6 -40 2 -39.5 Q-3 -41 -8 -35Z" fill="#e6c25c"/>
+ <circle cx="-5" cy="-32.6" r="1.4" fill="#ff9fb4" opacity=".55"/><circle cx="5" cy="-32.6" r="1.4" fill="#ff9fb4" opacity=".55"/>
+ <circle cx="-2.7" cy="-35.5" r="1.05" fill="#2a2235"/><circle cx="2.7" cy="-35.5" r="1.05" fill="#2a2235"/>
+ <path d="M-1.6 -31.4 h3.2" stroke="#2a2235" stroke-width=".9" stroke-linecap="round"/>
+ <path d="M-8.4 -36 Q-8.6 -46.5 0 -46.5 Q8.6 -46.5 8.4 -36" stroke="#22263a" stroke-width="1.5" fill="none"/><rect x="-10" y="-38.5" width="3.4" height="5.5" rx="1.5" fill="#22263a"/><path d="M-8 -33 Q-7 -29.5 -3 -30" stroke="#22263a" stroke-width="1" fill="none"/>
+ <path id="Mbrow" style="display:none" d="M-5.4 -40.6 l4 1.4 M5.4 -40.6 l-4 1.4" stroke="#8a6a20" stroke-width="1.1" stroke-linecap="round"/>
+ <g id="Mcarry" transform="translate(-11 -14)"></g>
+ </g>`;
+  const CARRY = {
+    gb: `<g class="gbm" transform="translate(-4 -9) scale(.38)">${GBP}</g>`,
+    korb: `<path d="M-6 -7 h12 l-1.5 8 h-9z" fill="#c9a24a"/><path d="M-6 -7 h12" stroke="#a6824f" stroke-width="1.4"/><path d="M-4 -4 h8 M-4 -1 h8" stroke="#a6824f" stroke-width=".7"/><path d="M-4 -7 q0 -4 3 -4 q3 0 3 4" fill="#fff" opacity=".9"/>`,
+    pizza: `<rect x="-7" y="-4" width="14" height="4.5" rx="1" fill="#e8d3a6"/><path d="M-7 -4 h14" stroke="#c7322b" stroke-width="1.2"/><text x="0" y="-.2" text-anchor="middle" font-size="2.8" font-weight="800" fill="#c7322b" font-family="Nunito,sans-serif">PIZZA</text>`
+  };
+  const lob = (x, y, sc, col, glow) => `<g ${glow ? 'class="bulb"' : ""} fill="${col}" transform="translate(${x} ${y}) scale(${sc})"><ellipse cx="0" cy="0" rx="1.5" ry="2.1"/><circle cx="-1.9" cy="-2.3" r="1"/><circle cx="1.9" cy="-2.3" r="1"/><path d="M-1 -1.4 l-.9 -.8 M1 -1.4 l.9 -.8 M-.8 1.8 l-.7 1.2 M.8 1.8 l.7 1.2" stroke="${col}" stroke-width=".55" fill="none"/></g>`;
+  const LCOL = ["#ff6a4d", "#e8453c", "#ffb08a", "#ff8a5c"];
+  const DECO = {
+    wohn: { back: "", light: `<g class="deco" data-l="1"><path d="M12 10 Q35 21 58 10 Q81 21 104 10" stroke="#3a3f52" stroke-width=".6" fill="none"/>${[[18, 14], [28, 17], [38, 18], [48, 15], [66, 14], [76, 17], [86, 18], [96, 15]].map(([x, y], i) => lob(x, y, 1, LCOL[i % 4], true)).join("")}</g>` },
+    schlaf: { back: "", light: `<g class="deco" data-l="2"><path d="M30 48 Q50 56 70 48 Q80 53 90 48" stroke="#3a3f52" stroke-width=".6" fill="none"/>${[[36, 52], [44, 54], [52, 54], [60, 52], [74, 51], [84, 51]].map(([x, y], i) => lob(x, y, 0.9, LCOL[i % 4], true)).join("")}</g>` },
+    flur: { back: `<g class="deco" data-l="2"><path d="M44 12 Q74 20 106 12" stroke="#e9e1f2" stroke-width=".6" fill="none"/>${[50, 58, 66, 74, 82, 90, 98].map((x, i) => {
+      const y = 13 + Math.sin(i / 6 * Math.PI) * 3.5;
+      return `<path d="M${x} ${y} l3.4 7 3.4 -7z" fill="${i % 2 ? "#e8453c" : "#ff8a5c"}"/>` + lob(x + 3.4, y + 2.6, 0.45, "#fff4e8");
+    }).join("")}</g>`, light: "" },
+    bad: { back: `<g class="deco" data-l="2">${lob(100, 48, 2.4, "#e8453c")}<circle cx="98.8" cy="42.8" r=".5" fill="#1d1a2b"/><circle cx="101.2" cy="42.8" r=".5" fill="#1d1a2b"/><rect x="88" y="36" width="5" height="9" rx="1.5" fill="#ff8a5c"/><rect x="89.4" y="33" width="2.2" height="3.4" fill="#b9c3cf"/>${lob(90.5, 41, 0.7, "#fff4e8")}</g>`, light: "" },
+    kueche: { back: `<g class="deco" data-l="3" transform="translate(0 7)"><path d="M12 28 Q25 33 38 28" stroke="#8a6a4f" stroke-width="1" fill="none"/>${[[16, 30.5], [25, 32], [34, 30.5]].map(([x, y], i) => lob(x, y + 2, 0.85, LCOL[i % 4])).join("")}<text x="25" y="25" text-anchor="middle" font-family="Fredoka,sans-serif" font-weight="700" font-size="4.6" fill="#ffb08a">HUMMER HOME</text></g>`, light: "" },
+    arbeit: { back: `<g class="deco" data-l="3"><ellipse cx="98" cy="86" rx="6.5" ry="3.6" fill="#e8453c"/><circle cx="91.5" cy="83" r="2" fill="#e8453c"/><circle cx="104.5" cy="83" r="2" fill="#e8453c"/><circle cx="96.6" cy="85.4" r=".55" fill="#1d1a2b"/><circle cx="99.4" cy="85.4" r=".55" fill="#1d1a2b"/></g>`, light: `<g class="deco" data-l="3"><path d="M12 30 Q36 40 60 30" stroke="#3a3f52" stroke-width=".6" fill="none"/>${[[18, 34], [28, 37], [38, 38], [48, 36], [56, 33]].map(([x, y], i) => lob(x, y, 0.9, LCOL[i % 4], true)).join("")}</g>` }
+  };
+  const METALBOX = `<g transform="translate(57 29)"><rect width="8" height="9" rx="1.6" fill="#22263a"/><circle cx="4" cy="3" r="1.6" fill="#3a3f52"/><circle cx="4" cy="6.6" r="1.1" fill="#3a3f52"/></g><g id="notes" style="display:none"><text class="note n1" x="58" y="25" font-size="6" fill="#ff7d8e">\u266B</text><text class="note n2" x="64" y="22" font-size="5" fill="#ffd27a">\u266A</text><text class="note n3" x="61" y="18" font-size="5.5" fill="#c9a2ff">\u266B</text></g>`;
+  function roomSVG(r) {
+    const w = WALL[r], dk = shade(w, 0.72), dkk = shade(w, 0.58);
+    let s = `<g id="rm-${r}" transform="translate(${ox(r)} ${oy(r)})"><clipPath id="clip-${r}"><rect width="${RW}" height="${RH}"/></clipPath><g clip-path="url(#clip-${r})">`;
+    s += `<rect width="${RW}" height="${RH}" fill="url(#wp-${r})"/>`;
+    s += `<path d="M0 0 H${RW} L${RW - 8} 8 H8Z" fill="${dkk}"/><path d="M0 0 L8 8 V100 L0 ${RH}Z" fill="${dk}"/><path d="M${RW} 0 L${RW - 8} 8 V100 L${RW} ${RH}Z" fill="${dk}"/>`;
+    s += FLOOR[r] === "wood" ? `<path d="M0 ${RH} L8 100 H${RW - 8} L${RW} ${RH}Z" fill="#7a5a45"/>` + [103, 107, 111].map((y) => `<path d="M${(116 - y) / 2} ${y} H${RW - (116 - y) / 2}" stroke="#6a4c3a" stroke-width=".8"/>`).join("") + [20, 44, 68, 92].map((x) => `<path d="M${x} 100 L${x + (x - 58) * 0.16} ${RH}" stroke="#6a4c3a" stroke-width=".6"/>`).join("") : `<path d="M0 ${RH} L8 100 H${RW - 8} L${RW} ${RH}Z" fill="#c9d3df"/>` + [105, 110].map((y) => `<path d="M${(116 - y) / 2} ${y} H${RW - (116 - y) / 2}" stroke="#aab6c6" stroke-width=".7"/>`).join("") + [22, 40, 58, 76, 94].map((x) => `<path d="M${x} 100 L${x + (x - 58) * 0.16} ${RH}" stroke="#aab6c6" stroke-width=".7"/>`).join("");
+    s += `<path d="M8 99.4 H${RW - 8}" stroke="${shade(w, 1.35)}" stroke-width="1.6"/>`;
+    const W = WIN[r];
+    if (W) {
+      if (W[0] === "rect") {
+        const [, x, y, ww, hh] = W;
+        s += `<rect x="${x - 2}" y="${y - 2}" width="${ww + 4}" height="${hh + 4}" rx="2" fill="#e9e1f2"/><rect x="${x}" y="${y}" width="${ww}" height="${hh}" style="fill:var(--sky)"/><g class="stars" transform="translate(${x} ${y})"><circle cx="${ww * 0.25}" cy="${hh * 0.3}" r=".7" fill="#fff"/><circle cx="${ww * 0.7}" cy="${hh * 0.2}" r=".6" fill="#fff"/><circle cx="${ww * 0.55}" cy="${hh * 0.65}" r=".5" fill="#fff"/><circle cx="${ww * 0.82}" cy="${hh * 0.55}" r="2.2" fill="#fff6c9"/></g><path d="M${x + ww / 2} ${y} v${hh} M${x} ${y + hh / 2} h${ww}" stroke="#e9e1f2" stroke-width="1.6"/><path d="M${x - 4} ${y - 3} q${ww / 4 + 2} 8 0 ${hh + 6}" fill="#ff9fb4" opacity=".75"/><path d="M${x + ww + 4} ${y - 3} q${-ww / 4 - 2} 8 0 ${hh + 6}" fill="#ff9fb4" opacity=".75"/>`;
+      } else {
+        const [, cx, cy, rr] = W;
+        s += `<circle cx="${cx}" cy="${cy}" r="${rr + 2}" fill="#e9e1f2"/><circle cx="${cx}" cy="${cy}" r="${rr}" style="fill:var(--sky)"/><path d="M${cx - rr} ${cy} h${rr * 2} M${cx} ${cy - rr} v${rr * 2}" stroke="#e9e1f2" stroke-width="1.4"/>`;
+      }
+    }
+    if (r === "kueche") s += `<clipPath id="nbclip"><rect x="60" y="10" width="28" height="20"/></clipPath><g id="nachbar" style="display:none" clip-path="url(#nbclip)"><circle cx="80" cy="27" r="8" fill="#e2b48f"/><path d="M72 24 q0 -9 8 -9 q8 0 8 9 q-3 -4 -8 -4 q-5 0 -8 4z" fill="#b9c3cf"/><circle cx="77" cy="25.5" r="2.2" fill="none" stroke="#2a2235" stroke-width=".8"/><circle cx="83" cy="25.5" r="2.2" fill="none" stroke="#2a2235" stroke-width=".8"/><circle cx="77" cy="25.5" r=".8" fill="#2a2235"/><circle cx="83" cy="25.5" r=".8" fill="#2a2235"/><path d="M76 30 q4 -2 8 0" stroke="#8a8f9c" stroke-width="1.6" fill="none"/></g>`;
+    if (r === "flur") s += `<circle cx="92" cy="24" r="10" fill="#f3eefa" stroke="#8a6a4f" stroke-width="2"/>${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => `<path d="M92 15.5 v1.6" stroke="#5b4a72" stroke-width="${i % 3 ? 0.6 : 1.1}" transform="rotate(${i * 30} 92 24)"/>`).join("")}<path id="clkH" d="M92 24 v-5" stroke="#2a2235" stroke-width="1.6" stroke-linecap="round"/><path id="clkM" d="M92 24 v-7.5" stroke="#2a2235" stroke-width="1" stroke-linecap="round"/><circle cx="92" cy="24" r="1" fill="#e8453c"/>`;
+    if (PEND[r] !== void 0) {
+      const x = PEND[r];
+      s += `<path d="M${x} 8 v10" stroke="#2a2235" stroke-width=".8"/><path d="M${x - 7} 25 q0 -7 7 -7 q7 0 7 7z" fill="#ffcf7a"/><ellipse cx="${x}" cy="25" rx="7" ry="1.4" fill="#ffe7b0"/>`;
+    }
+    s += (DECO[r] ? DECO[r].back : "") + customSVG(r);
+    s += `<g transform="translate(${SCX} ${SCY}) scale(${SCS})">${SCENE[r]}${r === "kueche" ? METALBOX : ""}</g>`;
+    s += `<rect class="night" width="${RW}" height="${RH}" fill="#0b0a20" opacity="0"/>`;
+    const P = POOL[r];
+    s += `<ellipse class="pool" cx="${P[0]}" cy="${P[1]}" rx="${P[2]}" ry="${P[2] * 0.9}" fill="url(#pool${r === "arbeit" ? "B" : ""})" opacity="0"/>`;
+    s += DECO[r] ? DECO[r].light : "";
+    s += `<g transform="translate(${SCX} ${SCY}) scale(${SCS})"><g id="gbl-${r}"></g></g>`;
+    if (r === "flur") s += `<g id="pkgs"></g><g id="bell" style="display:none"><g class="ring"><path d="M54 30 q0 -7 5 -7 q5 0 5 7 l2 3 h-14z" fill="#ffd23f"/><circle cx="59" cy="34.5" r="1.6" fill="#e6b400"/></g><path d="M47 27 l-3 -2 M47 31 h-4 M71 27 l3 -2 M71 31 h4" stroke="#ffd23f" stroke-width="1.2" stroke-linecap="round"/></g>`;
+    s += `</g>`;
+    s += `<g class="plaque"><rect x="11" y="11" width="${LABEL[r].length * 5 + 10}" height="11" rx="3" fill="#1d1a2b" opacity=".78"/><text id="lbl-${r}" x="16" y="19" font-family="Nunito,sans-serif" font-weight="800" font-size="7" letter-spacing=".4" fill="#e8e2f4">${LABEL[r].toUpperCase()}</text></g>`;
+    s += `<rect class="hl" x="1.5" y="1.5" width="${RW - 3}" height="${RH - 3}" rx="2" fill="none" stroke-width="3"/>`;
+    s += `<g class="nearmark" transform="translate(${RW - 14} 16)"><circle r="7" fill="#ffcf7a"/><path d="M-3 0 h6 M1 -3 l3 3 -3 3" stroke="#1d1a2b" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+    s += `<rect class="room" data-r="${r}" id="room-${r}" tabindex="0" role="button" aria-label="${ROOMS[r].n}" width="${RW}" height="${RH}" fill="transparent"/>`;
+    return s + `</g>`;
+  }
+  function wallpaperDefs() {
+    const p = (id, w, h, body, bg) => `<pattern id="${id}" width="${w}" height="${h}" patternUnits="userSpaceOnUse"><rect width="${w}" height="${h}" fill="${bg}"/>${body}</pattern>`;
+    return p("wp-schlaf", 12, 12, `<circle cx="3" cy="3" r="1.1" fill="#7d69a0"/><circle cx="9" cy="9" r="1.1" fill="#7d69a0"/>`, WALL.schlaf) + p("wp-bad", 12, 12, `<path d="M0 .4 H12 M.4 0 V12" stroke="#6b8aa6" stroke-width=".8"/>`, WALL.bad) + p("wp-arbeit", 8, 8, `<rect width="4" height="8" fill="#414e70"/>`, WALL.arbeit) + p("wp-wohn", 14, 14, `<path d="M7 1 L11 7 L7 13 L3 7Z" fill="none" stroke="#9a6a63" stroke-width=".9"/><circle cx="0" cy="0" r="1" fill="#9a6a63"/><circle cx="14" cy="14" r="1" fill="#9a6a63"/>`, WALL.wohn) + p("wp-flur", 14, 14, `<rect width="5" height="14" fill="#63517c"/>`, WALL.flur) + p("wp-kueche", 10, 10, `<rect width="5" height="5" fill="#557771"/><rect x="5" y="5" width="5" height="5" fill="#557771"/>`, WALL.kueche) + `<radialGradient id="pool"><stop offset="0" stop-color="#ffd58a" stop-opacity=".85"/><stop offset=".6" stop-color="#ffb35a" stop-opacity=".25"/><stop offset="1" stop-color="#ffb35a" stop-opacity="0"/></radialGradient><radialGradient id="poolB"><stop offset="0" stop-color="#9fd3ff" stop-opacity=".7"/><stop offset="1" stop-color="#7fc8ff" stop-opacity="0"/></radialGradient>`;
+  }
+  function buildHouse() {
+    let s = `<svg id="house" viewBox="0 -44 380 372" preserveAspectRatio="xMidYMid meet" style="--sky:#9fd3ff;--gbr:2.5px"><defs>${wallpaperDefs()}</defs>` + outdoorSVG();
+    s += `<path d="M2 46 L190 4 L378 46Z" fill="#6b3f3a"/><path d="M2 46 L190 4 L378 46" stroke="#4e2c2a" stroke-width="2.5" fill="none" stroke-linejoin="round"/><path d="M30 40 L190 9 L350 40" stroke="#7d4b44" stroke-width="2" fill="none"/><path d="M60 43 L190 16 L320 43" stroke="#7d4b44" stroke-width="2" fill="none"/>`;
+    s += `<rect x="290" y="12" width="16" height="24" fill="#5a4a5e"/><rect x="287" y="9" width="22" height="5" rx="1" fill="#4a3c4e"/><g class="smoke"><circle cx="298" cy="4" r="3" fill="#a79fbe" opacity=".5"/><circle cx="304" cy="-2" r="2.4" fill="#a79fbe" opacity=".35"/></g>`;
+    s += `<circle cx="190" cy="31" r="8.5" fill="#e9e1f2"/><clipPath id="atticClip"><circle cx="190" cy="31" r="7"/></clipPath><circle cx="190" cy="31" r="7" fill="#2a2540"/><g clip-path="url(#atticClip)"><g class="attic" transform="translate(185 33) scale(.42)">${GBP}</g></g>`;
+    s += `<rect x="8" y="40" width="364" height="246" rx="2" fill="#2e2740"/>`;
+    s += ORDER.map(roomSVG).join("");
+    [[128, 0], [248, 0], [128, 1], [248, 1]].forEach(([x, row]) => {
+      const y = GYS[row];
+      s += `<rect x="${x}" y="${y + 56}" width="4" height="60" fill="#1a1626"/><rect x="${x - 1}" y="${y + 54}" width="6" height="3" fill="#8a6a4f"/>`;
+    });
+    s += `<rect x="4" y="284" width="372" height="6" rx="2" fill="#4a3f55"/>` + gardenSVG();
+    s += `<g id="figs" style="filter:brightness(1)"><g id="robo"><ellipse cx="0" cy="0" rx="8" ry="2" fill="#000" opacity=".25"/><path d="M-8 -1 q0 -4 8 -4 q8 0 8 4z" fill="#3a3f52"/><ellipse cx="0" cy="-4.6" rx="6.5" ry="1.6" fill="#545b75"/><circle class="led" cx="3" cy="-4.6" r=".9" fill="#b8f27c"/></g><g id="figM" class="fig"><g transform="scale(1.12)">${FIG_M}</g><g id="Mbub"></g></g><g id="figL" class="fig"><g transform="scale(1.12)">${FIG_L}</g><g id="Lbub"></g></g></g><g id="bubs"></g>`;
+    s += `</svg>`;
+    $("plan").innerHTML = s;
+  }
+  function spotFor(who) {
+    if (MODE === "M") {
+      if (who === "M") {
+        if (S.room === "weg") return { x: 300, y: 318, room: "out", hidden: true };
+        const r = S.room;
+        const sofa = r === "wohn" && (S.gaming || S.watching);
+        return { x: ox(r) + (sofa ? 30 : r === "schlaf" ? 98 : npcRoomM() === r ? 74 : 56), y: oy(r) + FEET, room: r };
+      }
+      const nr = npcRoomM();
+      if (nr === "weg") return { x: 300, y: 318, room: "out", hidden: true };
+      if (npcAsleep()) return { x: ox("schlaf") + 60, y: oy("schlaf") + FEET, room: "schlaf", hidden: true };
+      const xo2 = nr === "wohn" ? S.matchOn ? 48 : 40 : S.room === nr ? 36 : 52;
+      return { x: ox(nr) + xo2, y: oy(nr) + FEET, room: nr };
+    }
+    if (who === "L") {
+      if (S.room === "weg") return S.evening ? { x: 300, y: 318, room: "out", hidden: true } : { x: -30, y: 318, room: "out" };
+      const r = S.room;
+      const mSame = S.M.ex && S.M.room === r;
+      return { x: ox(r) + (mSame ? 34 : 42), y: oy(r) + FEET, room: r, hidden: S.room === "weg" };
+    }
+    const M = S.M;
+    if (!M.ex) return { x: ox("arbeit") + 92, y: oy("arbeit") + FEET - 2, room: "arbeit" };
+    if (M.room === "weg") return CAR.includes(M.ex.why) ? { x: 304, y: 318, room: "out", hidden: true } : { x: 420, y: 318, room: "out" };
+    const lSame = S.room === M.room;
+    if (M.ex.kind === "bed" && M.step >= 2) return { x: ox("schlaf") + 70, y: oy("schlaf") + FEET, room: "schlaf", hidden: true };
+    const xo = M.room === "schlaf" && M.ex.kind === "bed" ? 70 : M.room === "flur" ? 74 : lSame ? 80 : 66;
+    return { x: ox(M.room) + xo, y: oy(M.room) + FEET, room: M.room };
+  }
+  const FIGPOS = {};
+  function moveFig(who) {
+    const el = $("fig" + who);
+    const to = spotFor(who);
+    const from = FIGPOS[who];
+    const tf = (p) => `translate(${p.x}px, ${p.y}px)`;
+    FIGPOS[who] = to;
+    if (!from || REDUCED) {
+      el.style.transform = tf(to);
+      el.style.opacity = to.hidden ? 0 : 1;
+      return;
+    }
+    if (from.x === to.x && from.y === to.y && !!from.hidden === !!to.hidden) return;
+    let frames;
+    let dur = who === "M" ? 1300 : 600;
+    const door = { x: ox("flur") + 55, y: oy("flur") + FEET - 3 }, yard = { x: ox("flur") + 55, y: 318 };
+    const P = (p, o) => ({ transform: tf(p), opacity: o });
+    if (to.room === "out" && from.room !== "out") {
+      dur = 3e3;
+      frames = [P(from, 1), __spreadProps(__spreadValues({}, P(door, 1)), { offset: 0.3 }), __spreadProps(__spreadValues({}, P(door, 0)), { offset: 0.38 }), __spreadProps(__spreadValues({}, P(yard, 0)), { offset: 0.42 }), __spreadProps(__spreadValues({}, P(yard, 1)), { offset: 0.5 }), __spreadProps(__spreadValues({}, P(to, 1)), { offset: 0.95 }), P(to, to.hidden ? 0 : 1)];
+    } else if (from.room === "out" && to.room !== "out") {
+      dur = 2600;
+      frames = [P(from, from.hidden ? 0 : 1), __spreadProps(__spreadValues({}, P(from, 1)), { offset: 0.08 }), __spreadProps(__spreadValues({}, P(yard, 1)), { offset: 0.5 }), __spreadProps(__spreadValues({}, P(yard, 0)), { offset: 0.58 }), __spreadProps(__spreadValues({}, P(door, 0)), { offset: 0.62 }), __spreadProps(__spreadValues({}, P(door, 1)), { offset: 0.7 }), P(to, 1)];
+    } else if (from.y !== to.y && !from.hidden && !to.hidden) {
+      frames = [{ transform: tf(from), opacity: 1 }, { transform: `translate(${from.x + (to.x > from.x ? 10 : -10)}px, ${from.y}px)`, opacity: 0, offset: 0.4 }, { transform: `translate(${to.x + (to.x > from.x ? -10 : 10)}px, ${to.y}px)`, opacity: 0, offset: 0.6 }, { transform: tf(to), opacity: 1 }];
+    } else frames = [{ transform: tf(from), opacity: from.hidden ? 0 : 1 }, { transform: tf(to), opacity: to.hidden ? 0 : 1 }];
+    const body = el.querySelector(".body");
+    body.classList.add("walk");
+    if (!el.animate) {
+      el.style.transition = "none";
+      el.style.transform = tf(from);
+      el.style.opacity = from.hidden ? 0 : 1;
+      void el.getBoundingClientRect();
+      el.style.transition = `transform ${dur}ms ease-in-out, opacity ${Math.min(dur, 500)}ms`;
+      el.style.transform = tf(to);
+      el.style.opacity = to.hidden ? 0 : 1;
+      setTimeout(() => body.classList.remove("walk"), dur);
+      return;
+    }
+    const a = el.animate(frames, { duration: dur, easing: "ease-in-out", fill: "forwards" });
+    a.onfinish = () => {
+      el.style.transform = tf(to);
+      el.style.opacity = to.hidden ? 0 : 1;
+      a.cancel();
+      body.classList.remove("walk");
+    };
+  }
+  function minis(r) {
+    let g = "";
+    Object.entries(SPOTS).forEach(([id, sp]) => {
+      if (sp.room !== r || !S.spots[id] || !SPOTPOS[id] || id === "fiat") return;
+      let [x, y] = SPOTPOS[id];
+      for (let i = 0; i < S.spots[id]; i++) g += `<g class="gbm" transform="translate(${x - 5 + i * 7} ${y - 12}) scale(.42)"><g class="gbi" style="animation-delay:${(i * 0.7 + x % 5 * 0.4).toFixed(1)}s">${GBP}</g></g>`;
+    });
+    return g;
+  }
+  const carGone = () => !!(S.M.ex && S.M.room === "weg" && CAR.includes(S.M.ex.why));
+  function metalOn() {
+    var _a;
+    if (MODE === "M") return S.M.ex && S.M.room === "kueche" && ["cook", "lunch", "pause"].includes((_a = S.M.ex.steps[S.M.step]) == null ? void 0 : _a[2]);
+    return S.room === "kueche" || S.disguise === "korb";
+  }
+  function carAwayNow() {
+    if (MODE === "M") return !!(S.room === "weg" || S.M.ex && S.M.room === "weg" && ["city", "outlet", "dinner"].includes(S.M.ex.kind));
+    return !!(S.M.ex && S.M.room === "weg" && CAR.includes(S.M.ex.why));
+  }
+  const turtleOff = () => Math.round(-46 + 46 * Math.max(0, Math.min(1, (S.t - 540) / 810)));
+  function updateHouse() {
+    var _a;
+    if (!$("house")) buildHouse();
+    const svg = $("house"), n = nightAt(S.t), mOut = S.M.ex;
+    svg.style.setProperty("--sky", skyAt(S.t));
+    svg.style.setProperty("--gbr", (2.5 + 4.5 * n).toFixed(1) + "px");
+    svg.querySelectorAll(".night").forEach((e) => e.setAttribute("opacity", (n * 0.62).toFixed(2)));
+    svg.querySelectorAll(".pool").forEach((e) => e.setAttribute("opacity", (n * 0.9).toFixed(2)));
+    svg.querySelectorAll(".stars").forEach((e) => e.setAttribute("opacity", n.toFixed(2)));
+    $("figs").style.filter = `brightness(${(1 - 0.3 * n).toFixed(2)})`;
+    ORDER.forEach((r) => {
+      const g = $("rm-" + r), here = S.room === r, near = (ADJ[S.room] || []).includes(r), closed = MODE === "L" && r === "arbeit" && !mOut;
+      g.classList.toggle("here", here);
+      g.classList.toggle("near", near && !closed);
+      g.classList.toggle("closed", closed);
+      $("room-" + r).setAttribute("aria-label", ROOMS[r].n + (closed ? ", M arbeitet" : "") + (here ? ", hier bist du" : ""));
+      const mm = minis(r), gl = $("gbl-" + r);
+      if (gl.dataset.c !== mm) {
+        gl.innerHTML = mm;
+        gl.dataset.c = mm;
+      }
+      gl.classList.toggle("hush", !!(mOut && S.M.room === r));
+    });
+    $("lbl-arbeit").textContent = MODE === "M" ? CALLS.some((c2) => S.t >= c2 && S.t < c2 + 30) ? "B\xDCRO \xB7 CALL" : "B\xDCRO" : mOut ? "B\xDCRO \xB7 OFFEN" : "B\xDCRO \xB7 MEETING";
+    $("lbl-arbeit").previousElementSibling.setAttribute("width", mOut ? 72 : 84);
+    const h = S.t / 60 % 12, m = S.t % 60;
+    $("clkH").setAttribute("transform", `rotate(${h * 30 + m / 2} 92 24)`);
+    $("clkM").setAttribute("transform", `rotate(${m * 6} 92 24)`);
+    const tt = $("turtle");
+    if (tt) tt.setAttribute("transform", `translate(${turtleOff()} 0)`);
+    const cups = Math.min(7, 1 + (S.coffees || 0));
+    let c = "";
+    for (let i = 0; i < cups; i++) c += `<rect x="${74 + (i % 2 ? 1 : -1) * (i > 0)}" y="${40 - i * 6.6}" width="9" height="6.4" rx="1" fill="#eef3fb"/><path d="M${83 + (i % 2 ? 1 : -1) * (i > 0)} ${42 - i * 6.6} h2 v3 h-2" stroke="#eef3fb" stroke-width="1.3" fill="none"/>`;
+    c += `<path class="steam" d="M77 ${36 - cups * 6.6 + 6} q-2 -3 0 -6 q2 -3 0 -6 M81 ${36 - cups * 6.6 + 6} q-2 -3 0 -6" stroke="#a79fbe" stroke-width="1.2" fill="none"/>`;
+    $("cups").innerHTML = c;
+    const tb = $("tbub");
+    if (tb) {
+      const inR = S.room === "schlaf";
+      if (inR && tb.style.display === "none") $("tbubt").textContent = MODE === "M" ? pick(["Hmpf.", "Psst! L schl\xE4ft.", "Ich seh dich, M."]) : pick(["Hallo L!", "Da bist du ja!", "Hmpf\u2026 hallo.", "Sch\xF6n, dich zu sehen."]);
+      tb.style.display = inR ? "" : "none";
+    }
+    $("bell").style.display = S.ring ? "" : "none";
+    $("pkgs").innerHTML = S.packages.filter((p) => p.room === "flur").map((p, i) => `<g transform="translate(${18 + i * 16} 98)"><rect width="14" height="11" rx="1.5" fill="#c79a5c"/><rect x="5.5" width="3" height="11" fill="#e8d3a6"/><path d="M0 3 h14" stroke="#9c7440" stroke-width=".8"/></g>`).join("");
+    $("sleepL").style.display = MODE === "M" && npcAsleep() ? "" : "none";
+    $("sleepM").style.display = MODE === "L" && typeof mAsleep === "function" && mAsleep() ? "" : "none";
+    if (MODE === "M") {
+      $("Lcarry").innerHTML = S.matchOn && npcRoomM() === "wohn" || S.lBusy ? PHONE : "";
+    } else
+      $("Lcarry").innerHTML = S.disguise ? CARRY[S.disguise] : S.inv > 0 ? CARRY.gb : "";
+    if (MODE === "M") $("Mcarry").innerHTML = S.aperolM ? `<path d="M-2.4 -9 h4.8 l-.8 6 h-3.2z" fill="#ff7a1a" opacity=".9"/><path d="M-2.4 -9 h4.8" stroke="#fff" stroke-width=".5"/><circle cx="1.6" cy="-9.4" r="1" fill="#ff9a3c"/>` : S.beer ? BEER : S.practice ? `<path d="M0 -12 L6 8" stroke="#b9c3cf" stroke-width="1.1"/><path d="M5 7.5 h3 v1.6 h-3z" fill="#9aa6c4"/><circle cx="10" cy="10" r="1.2" fill="#fff"/>` : S.gaming ? PAD : "";
+    else
+      $("Mcarry").innerHTML = mOut && S.M.room === "weg" ? "" : mOut && mOut.kind === "coffee" && S.M.step >= 1 ? `<rect x="-3" y="-4" width="6" height="5" rx="1" fill="#eef3fb"/><path d="M-2 -6 q-1 -2 0 -3" stroke="#a79fbe" stroke-width=".7" fill="none"/>` : "";
+    $("Mbrow").style.display = MODE === "L" && S.susp >= 50 ? "" : "none";
+    const tv = $("tvscr");
+    if (tv) tv.setAttribute("fill", S.matchOn ? "#3f8a4a" : S.gaming ? S.game === "golf" ? "#4f9a8a" : "#5b3fa0" : S.lTV === "aoe" ? "#b08a3c" : S.lTV === "crime" ? "#4a1f2e" : "#2b3247");
+    ["wohn", "flur"].forEach((r) => $("rm-" + r).classList.toggle("broken", !!(S.broken && S.broken[r])));
+    const dl = S.deco || 1;
+    if (svg.dataset.deco !== String(dl)) {
+      svg.dataset.deco = dl;
+      svg.querySelectorAll(".deco").forEach((el) => el.style.display = +el.dataset.l <= dl ? "" : "none");
+    }
+    svg.querySelectorAll(".bulb").forEach((b) => b.style.filter = `drop-shadow(0 0 ${(0.5 + 4 * n).toFixed(1)}px ${b.getAttribute("fill")})`);
+    $("notes").style.display = metalOn() ? "" : "none";
+    (_a = $("figL")) == null ? void 0 : _a.classList.toggle("headbang", !!metalOn() && (MODE === "M" || S.room === "kueche"));
+    const tvp = $("tvpitch");
+    if (tvp) tvp.style.display = S.matchOn ? "" : "none";
+    const tri = $("trikot");
+    if (tri) tri.style.display = MODE === "M" && (S.matchOn || S.day === 2 && S.t >= 1050) ? "" : "none";
+    $("Lsweat").style.display = MODE === "L" && mOut && S.M.room === S.room && S.inv > 0 && !S.disguise ? "" : "none";
+    updateOutdoor();
+    moveFig("L");
+    moveFig("M");
+  }
+  const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const duo = (mid = "") => `<div class="duo"><div class="av">${AV.L}L</div><div class="mid">${mid}</div><div class="av">${AV.M}M</div></div>`;
+  const OFFICE = ["Du bist auf stumm!", "Siehst du meinen Bildschirm?", "Lass uns das offline kl\xE4ren.", "Kurze Frage\u2026", "Ich muss gleich in den n\xE4chsten Call.", "Ich teil mal kurz\u2026", "Kann noch nicht Feierabend machen\u2026"];
+  const bubTimers = {};
+  function bubbleSVG(text, y) {
+    const w = Math.max(18, text.length * 3.35 + 10);
+    return `<g class="bub"><rect x="${-w / 2}" y="${y - 9}" width="${w}" height="11" rx="5.5" fill="#f3eefa"/><path d="M-2 ${y + 1.8} l2 3.6 2 -3.6z" fill="#f3eefa"/><text x="0" y="${y - 1.6}" text-anchor="middle" font-family="Fredoka,sans-serif" font-weight="700" font-size="6.2" fill="#2a2235">${text}</text></g>`;
+  }
+  function bubble(who, text, ms = 2800) {
+    const el = $(who + "bub");
+    if (!el) return;
+    el.innerHTML = bubbleSVG(text, who === "M" ? -67 : -56);
+    clearTimeout(bubTimers[who]);
+    bubTimers[who] = setTimeout(() => {
+      el.innerHTML = "";
+    }, ms);
+  }
+  function worldBubble(key, x, y, text, ms = 2600) {
+    const L = $("bubs");
+    if (!L) return;
+    let g = $("wb-" + key);
+    if (!g) {
+      g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.id = "wb-" + key;
+      L.appendChild(g);
+    }
+    g.setAttribute("transform", `translate(${x} ${y})`);
+    g.innerHTML = bubbleSVG(text, 0);
+    clearTimeout(bubTimers[key]);
+    bubTimers[key] = setTimeout(() => {
+      g.innerHTML = "";
+    }, ms);
+  }
+  const DUCK_XY = [181, 93], HUMMER_XY = [74, 206], TIMMY_XY = [90, 82];
+  function roomEntered(r) {
+    if (r === "kueche" && Math.random() < 0.6) bubble("L", pick(["\\m/ Metal an!", "Lauter!", "Kochen ohne Metal geht nicht."]));
+    if (r === "bad" && Math.random() < 0.7) worldBubble("duck", ...DUCK_XY, pick(["Gluck gluck.", "Quak.", "Mir ist kalt."]));
+    if (r === "wohn") worldBubble("hummer", ...HUMMER_XY, S.spots.hummer > 0 ? "Hier ist nichts!" : pick(["Klack klack.", "Schnipp.", "Na, Chefin?", "Kuscheln?"]));
+    if (r === "flur" && Math.random() < 0.4) worldBubble("pig", ox("flur") + 4 + 104 * 0.92, oy("flur") + 82, pick(["Oink.", "Ich pass auf.", "Grunz.", "Schweinderl sieht alles."]));
+  }
+  const ACH = {
+    nie: { m: "L", i: "\u{1F648}", n: "Nie erwischt", d: "Ein ganzer Tag ohne Fund und ohne erwischt zu werden" },
+    radar: { m: "L", i: "\u{1F575}\uFE0F", n: "Unter dem Radar", d: "Tag beendet mit Ms Misstrauen unter 20 %" },
+    hummi: { m: "L", i: "\u{1F99E}", n: "Hummis Schatzkiste", d: "Das Versteck bei Hummi ist voll" },
+    alle: { m: "L", i: "\u{1F3E0}", n: "Versteckprofi", d: "In jedem Raum mindestens einen Glowbie versteckt" },
+    koch: { m: "L", i: "\u{1F918}", n: "P\xFCnktlich um zw\xF6lf", d: "Das Mittagessen war fertig, als M in die K\xFCche kam" },
+    warn: { m: "L", i: "\u{1F4E3}", n: "Danke, Hummi!", d: "Hummi hat dich vor M gewarnt" },
+    tratsch: { m: "L", i: "\u{1F4DE}", n: "Tratschtante", d: "Mit der Freundin oder Kollege S telefoniert" },
+    aperol: { m: "L", i: "\u{1F379}", n: "Aperol o\u2019clock", d: "Eine Aperol-Pause gemacht" },
+    bier: { m: "M", i: "\u{1F37A}", n: "Feierabendbier", d: "Drei Bier an einem Tag" },
+    ruffel: { m: "M", i: "\u{1F607}", n: "Bier ohne R\xFCffel", d: "Drei Bier an einem Tag und kein Verweis im Call" },
+    arminia: { m: "M", i: "\u26BD", n: "Arminia-Fan", d: "Ein Spiel von Arminia Bielefeld geschaut" },
+    retter: { m: "M", i: "\u{1FA79}", n: "Hummer-Retter", d: "Kaputte Hummer-Deko repariert" },
+    calls: { m: "M", i: "\u{1F3A7}", n: "Musterkollege", d: "Alle Calls eines Tages p\xFCnktlich" }
+  };
+  let ACH_GOT = [];
+  try {
+    ACH_GOT = JSON.parse(localStorage.getItem("glowbies-ach") || "[]");
+  } catch (e) {
+  }
+  function ach(id) {
+    if (!ACH[id] || ACH_GOT.includes(id)) return;
+    ACH_GOT.push(id);
+    try {
+      localStorage.setItem("glowbies-ach", JSON.stringify(ACH_GOT));
+    } catch (e) {
+    }
+    S.achNew = [...S.achNew || [], id];
+    say(`Erfolg freigeschaltet: ${ACH[id].i} ${ACH[id].n}${/[!?]$/.test(ACH[id].n) ? "" : "!"}`, "good");
+  }
+  function achToday() {
+    const a = S.achNew || [];
+    S.achNew = [];
+    return a.length ? `<p><b>Neue Erfolge</b></p><div class="achlist">${a.map((id) => `<div class="ach"><i>${ACH[id].i}</i><span><b>${ACH[id].n}</b><small>${ACH[id].d}</small></span></div>`).join("")}</div>` : "";
+  }
+  function achSheet(back) {
+    const row = (id) => {
+      const g = ACH_GOT.includes(id);
+      return `<div class="ach${g ? "" : " off"}"><i>${g ? ACH[id].i : "\u{1F512}"}</i><span><b>${ACH[id].n}</b><small>${ACH[id].d}</small></span></div>`;
+    };
+    const ids = Object.keys(ACH);
+    sheet(
+      `<h3>Erfolge</h3><p>${ACH_GOT.filter((i) => ACH[i]).length} von ${ids.length} freigeschaltet (auf diesem Ger\xE4t).</p><p><b>Als L</b></p><div class="achlist">${ids.filter((i) => ACH[i].m === "L").map(row).join("")}</div><p><b>Als M</b></p><div class="achlist">${ids.filter((i) => ACH[i].m === "M").map(row).join("")}</div>`,
+      [{ label: "Zur\xFCck", go: true, fn: back }]
+    );
+  }
+  function passTime(n) {
+    for (let k = 0; k < n && !busy; k++) tick();
+  }
+  function hummiWarn() {
+    const M = S.M;
+    if (MODE !== "L" || !M.ex || M.left !== 1 || S.room !== "wohn" || M.room === "wohn" || mAsleep()) return;
+    const nx = M.ex.steps[M.step + 1];
+    if (!nx || nx[0] !== "wohn") return;
+    const key = M.ex.start + "-" + M.step;
+    if (S.warned === key) return;
+    S.warned = key;
+    worldBubble("hummer", ...HUMMER_XY, "Schnipp! M kommt!", 3200);
+    say("Hummi winkt hektisch mit der Schere: M ist auf dem Weg ins Wohnzimmer!", "cue");
+    ach("warn");
+  }
+  const EVENTS = [
+    { id: "declutter", when: () => MODE === "L", run() {
+      say("L schaut in der Pause ein Decluttering-Video: \u201EBehalte nur, was Freude bringt.\u201C Alle Glowbies bringen Freude. Also bleibt alles.");
+      bubble("L", "Ab morgen miste ich aus!");
+    } },
+    { id: "tratsch", when: () => MODE === "L", run() {
+      bubble("L", "Nein! Echt jetzt?!", 3200);
+      say("L hat einen Tratsch-Termin mit Kollege S. Aus dem B\xFCro ruft M: \u201EIch bin im Call!\u201C L: \u201EIch auch!\u201C");
+    } },
+    { id: "freundin", when: () => MODE === "L", run() {
+      bubble("L", "Hiii! Du glaubst nicht\u2026", 3200);
+      say("L wollte eigentlich den Kleiderschrank ausmisten. Jetzt telefoniert sie seit einer Stunde mit ihrer Freundin. Der Schrank ist voller als vorher.");
+    } },
+    { id: "kritzel", when: () => MODE === "L", run() {
+      bubble("L", "Ich h\xF6r zu! Wirklich!", 3e3);
+      say("L sitzt im Meeting und kritzelt auf ihren Block: drei Hummer, ein Glowbie, ein Hummer mit Glowbie. Laut Protokoll hat sie \u201Eaktiv zugeh\xF6rt\u201C.");
+    } },
+    { id: "kritzelM", when: () => MODE === "M", run() {
+      say("L kritzelt im Call einen Hummer im Arminia-Trikot auf ihren Block. M ist ein bisschen ger\xFChrt.");
+    } },
+    { id: "robo", run() {
+      say("R\xFCdiger, der Saugroboter, ist gegen das Schweinderl gefahren. Beide tun so, als w\xE4re nichts passiert.");
+    } },
+    { id: "aperol", run() {
+      worldBubble("aperol", ox("kueche") + 92, oy("kueche") + 30, "L\u2026 Aperol\u2026", 3600);
+      say("Aus dem K\xFChlschrank ruft leise eine Aperolflasche: \u201EL\u2026 irgendwo ist schon 17 Uhr\u2026\u201C");
+    } },
+    { id: "timmy", run() {
+      worldBubble("timmy", ...TIMMY_XY, "Hmpf!");
+      say("Timmy ist vom Bett gerutscht. Er tut so, als w\xE4re das Absicht gewesen.");
+    } },
+    { id: "ente", run() {
+      worldBubble("duck", ...DUCK_XY, "Gluck!");
+      say("Die W\xE4rmflaschen-Ente gluckert ganz von allein. Niemand hat sie gef\xFCllt. Unheimlich.");
+    } },
+    { id: "budget", run() {
+      say("M rechnet vor, was die Glowbies gekostet haben. L kontert mit dem Preis f\xFCr seinen neuen Driver. Unentschieden.");
+      bubble("M", "Alles im Budget\u2026?", 3e3);
+    } },
+    { id: "spar", when: () => !S.M.ex, run() {
+      bubble("M", "Spartipp des Tages!", 3e3);
+      say("M schickt L einen Spartipp per Chat: \u201EWusstest du, dass man Glowbies auch NICHT kaufen kann?\u201C");
+    } },
+    { id: "paket", run() {
+      say("Ms Handy vibriert: \u201EIhre Sendung wurde beim Nachbarn abgegeben.\u201C M: \u201EIch hab doch gar nichts bestellt?\u201C L schaut sehr interessiert an die Decke.");
+      addSusp(3);
+    } }
+  ];
+  function maybeEvent() {
+    if (S.t < 600 || (S.events || 0) >= 3 || Math.random() > 0.035) return;
+    const pool = EVENTS.filter((e2) => !(S.used || []).includes(e2.id) && (!e2.when || e2.when()));
+    if (!pool.length) return;
+    const e = pick(pool);
+    S.used = [...S.used || [], e.id];
+    S.events = (S.events || 0) + 1;
+    e.run();
+  }
+  function outdoorSVG() {
+    let s = `<rect x="0" y="-44" width="380" height="340" style="fill:var(--sky)"/>`;
+    s += `<g id="ostars" opacity="0">${[[20, -30], [60, -12], [110, -36], [150, -20], [240, -34], [270, -14], [330, -28], [360, -8], [30, 10], [350, 14]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 0.8 : 1.2}" fill="#fff"/>`).join("")}</g>`;
+    s += `<g id="sun"><circle r="16" fill="#ffe27a" opacity=".25"/><circle r="10" fill="#ffe27a"/></g>`;
+    s += `<g id="moon" opacity="0"><circle r="9" fill="#fff6c9"/><circle cx="3" cy="-2" r="2" fill="#e9dfae"/><circle cx="-3" cy="3" r="1.4" fill="#e9dfae"/></g>`;
+    s += `<g class="cloud c1"><ellipse cx="0" cy="0" rx="16" ry="6" fill="#fff" opacity=".85"/><ellipse cx="9" cy="-4" rx="9" ry="6" fill="#fff" opacity=".85"/><ellipse cx="-8" cy="-3" rx="7" ry="5" fill="#fff" opacity=".85"/></g>`;
+    s += `<g class="cloud c2"><ellipse cx="0" cy="0" rx="12" ry="4.5" fill="#fff" opacity=".7"/><ellipse cx="6" cy="-3" rx="7" ry="4.5" fill="#fff" opacity=".7"/></g>`;
+    return s;
+  }
+  function gardenSVG() {
+    let s = `<rect x="-10" y="290" width="400" height="40" fill="#4f8a4f"/><rect x="-10" y="290" width="400" height="4" fill="#5f9e5c"/>`;
+    s += `<path d="M160 290 h60 l12 40 h-84z" fill="#b8a07a"/>`;
+    s += [...Array(12)].map((_, i) => `<rect x="${-4 + i * 8}" y="296" width="3" height="16" rx="1" fill="#e9e1f2"/>`).join("") + `<path d="M-6 300 h96 M-6 308 h96" stroke="#e9e1f2" stroke-width="1.6"/>`;
+    s += [...Array(3)].map((_, i) => `<rect x="${364 + i * 8}" y="296" width="3" height="16" rx="1" fill="#e9e1f2"/>`).join("") + `<path d="M362 300 h24 M362 308 h24" stroke="#e9e1f2" stroke-width="1.6"/>`;
+    s += `<g transform="translate(118 318)"><ellipse cx="0" cy="-8" rx="14" ry="10" fill="#3f7d4d"/><ellipse cx="10" cy="-6" rx="9" ry="8" fill="#4a8c58"/><circle cx="-4" cy="-12" r="1.6" fill="#ff7d8e"/><circle cx="6" cy="-9" r="1.6" fill="#ffd27a"/></g>`;
+    s += `<g transform="translate(140 320)"><rect x="-1.5" y="-18" width="3" height="18" fill="#6b4b3e"/><rect x="-8" y="-28" width="16" height="11" rx="5" fill="#7fc8ff"/><rect x="-8" y="-23" width="16" height="6" fill="#6ab0e6"/><g id="mbflag"><rect x="7" y="-34" width="1.6" height="9" fill="#2a2235"/><rect x="8.6" y="-34" width="6" height="4" fill="#e8453c"/></g><text x="0" y="-19" text-anchor="middle" font-size="3.4" font-weight="800" fill="#1d1a2b" font-family="Nunito,sans-serif">L + M</text></g>`;
+    s += `<g id="fiat" transform="translate(318 323)"><g id="fiatcar"><ellipse cx="0" cy="0" rx="28" ry="3" fill="#000" opacity=".25"/>
+    <path d="M-27 -4 q0 -9 7 -11 h41 q6 2 6 11 v2 h-54z" fill="#f4f2ed" stroke="#cfc9bd" stroke-width="1"/>
+    <path d="M-20 -15 q-1 -5 3 -6 h7 q2 0 2 2 v4z" fill="#d9d2c2"/><path d="M-19 -18.5 h9" stroke="#bfb6a3" stroke-width=".8"/>
+    <rect x="-4" y="-20" width="4" height="6" rx="1.4" fill="#c8302b"/><rect x="5" y="-20" width="4" height="6" rx="1.4" fill="#c8302b"/>
+    <path d="M12 -15 l3 -9 M12 -15 h4" stroke="#b9c3cf" stroke-width="1.2" stroke-linecap="round"/><path d="M12.6 -16 l2.6 -7.4 h1.4 l-2.4 7.4z" fill="#9fd3ff" opacity=".7"/>
+    <circle cx="14" cy="-18" r="2.4" fill="none" stroke="#2a2235" stroke-width=".9"/>
+    <g id="fiatgb" transform="translate(-1 -16)"></g>
+    <path d="M-27 -6 h54" stroke="#cfc9bd" stroke-width="1.2"/><rect x="-28" y="-4" width="6" height="2.4" rx="1" fill="#b9c3cf"/><rect x="22" y="-4" width="6" height="2.4" rx="1" fill="#b9c3cf"/>
+    <circle cx="23" cy="-9" r="2.2" fill="#ffe27a"/><circle cx="-24" cy="-9" r="1.6" fill="#ff7d8e"/><text x="0" y="-8.2" text-anchor="middle" font-size="3.4" font-weight="800" fill="#8a8f9c" font-family="Nunito,sans-serif">500</text>
+    <circle cx="-15" cy="-1" r="5.2" fill="#2a2235"/><circle cx="-15" cy="-1" r="2.2" fill="#b9c3cf"/><circle cx="15" cy="-1" r="5.2" fill="#2a2235"/><circle cx="15" cy="-1" r="2.2" fill="#b9c3cf"/></g></g>`;
+    s += `<g id="courier" style="display:none" transform="translate(196 320)"><ellipse cx="0" cy="0" rx="8" ry="2.2" fill="#000" opacity=".25"/><rect x="-4.5" y="-14" width="3.8" height="14" rx="1.9" fill="#5e4136"/><rect x=".7" y="-14" width="3.8" height="14" rx="1.9" fill="#5e4136"/><path d="M-7.5 -13 Q-8.5 -28 0 -28 Q8.5 -28 7.5 -13Z" fill="#ffd23f"/><circle cx="0" cy="-35" r="7" fill="#c98b62"/><path d="M-7.5 -36 Q-7 -43.5 0 -43.5 Q7 -43.5 7.5 -36z M6 -37 h5 v2 h-5z" fill="#c7322b"/><circle cx="-2.4" cy="-34" r=".9" fill="#2a2235"/><circle cx="2.4" cy="-34" r=".9" fill="#2a2235"/><path d="M-2 -31 q2 1.4 4 0" stroke="#2a2235" stroke-width=".8" fill="none"/><rect x="-11" y="-24" width="13" height="10" rx="1" fill="#c79a5c"/><rect x="-5.8" y="-24" width="2.6" height="10" fill="#e8d3a6"/>${bubbleSVG("Paket f\xFCr L!", -50)}</g>`;
+    s += `<rect id="gnight" x="-10" y="290" width="400" height="40" fill="#0b0a20" opacity="0"/>`;
+    return s;
+  }
+  function updateOutdoor() {
+    const n = nightAt(S.t);
+    const sp = Math.max(0, Math.min(1, (S.t - 480) / (1230 - 480)));
+    const sx = 20 + sp * 340, sy = -4 - Math.sin(sp * Math.PI) * 30;
+    $("sun").setAttribute("transform", `translate(${sx} ${sy})`);
+    $("sun").setAttribute("opacity", Math.max(0, 1 - n * 1.7).toFixed(2));
+    document.querySelectorAll("#house .cloud").forEach((c) => c.setAttribute("opacity", (1 - 0.75 * n).toFixed(2)));
+    const mp = Math.max(0, Math.min(1, (S.t - 1120) / 320));
+    $("moon").setAttribute("transform", `translate(${30 + mp * 300} ${-6 - Math.sin(mp * Math.PI) * 26})`);
+    $("moon").setAttribute("opacity", n.toFixed(2));
+    $("ostars").setAttribute("opacity", n.toFixed(2));
+    $("gnight").setAttribute("opacity", (n * 0.6).toFixed(2));
+    $("courier").style.display = S.ring ? "" : "none";
+    $("mbflag").style.opacity = S.ring || S.packages.length ? 1 : 0;
+    const carAway = carAwayNow();
+    $("fiatcar").classList.toggle("gone", carAway);
+    const fg = [...Array(S.spots.fiat || 0)].map((_, i) => `<g class="gbm" transform="translate(${i * 7 - 6} -3) scale(.36)"><g class="gbi">${GBP}</g></g>`).join("");
+    if ($("fiatgb").dataset.c !== fg) {
+      $("fiatgb").innerHTML = fg;
+      $("fiatgb").dataset.c = fg;
+    }
+    const gb = $("golfbag");
+    if (gb) gb.style.display = S.M.ex && S.M.ex.why === "range" && ["weg"].includes(S.M.room) ? "none" : "";
+    const nb = $("nachbar");
+    if (nb) nb.style.display = S.neighbor > 0 ? "" : "none";
+    const pg = $("pigeon");
+    if (pg) pg.style.display = S.pigeon > 0 ? "" : "none";
+  }
+  let MODE = "L";
+  const START_M = 360, END_M = 1320, CALLS = [480, 600, 840, 990];
+  const PUSHES = ["200,00 \u20AC f\xFCr a nois Dirndl", "34,95 \u20AC f\xFCr eine Bluse", "89,00 \u20AC f\xFCr Schuhe, \u201Edie waren reduziert\u201C", "49,99 \u20AC f\xFCr ein neues Jellycat"];
+  const callsText = () => CALLS.map((t) => fmt(t).replace(/^0/, "")).join(", ").replace(/, ([^,]*)$/, " und $1");
+  const DAYS_M = [
+    {
+      intro: "Heute Abend um 18:30 spielt Arminia. Vorher: vier Calls, Mittagessen um zw\xF6lf und eine L, die findet, dass die PlayStation zu oft an ist. L schl\xE4ft noch bis halb neun.",
+      deliveries: [{ t: 660, n: 3 }],
+      match: true
+    },
+    {
+      intro: "Kein Spiel heute. L geht nachmittags allein in die Stadt, Kleidung shoppen. Ms Handy wird vibrieren. Abends will sie essen gehen.",
+      deliveries: [],
+      city: true,
+      dinner: true
+    },
+    {
+      intro: "Saisonfinale! Arminia muss heute Abend gewinnen. Nachmittags will L mit M ins Outlet. Hummi hat das Trikot schon bereitgelegt.",
+      deliveries: [{ t: 620, n: 2 }],
+      outlet: true,
+      match: true
+    }
+  ];
+  const EXCUSES_M = [
+    { t: "\u201EIch teste nur, ob der Controller noch geht.\u201C", p: 0.45, ok: "L: \u201EAlso als ich vorhin AoE gezockt hab, ging er.\u201C Pause. \u201E\u2026Ups.\u201C Sie grinst und l\xE4sst ihn weiterspielen.", no: "L: \u201ESeit zwei Stunden?\u201C" },
+    { t: "\u201EIch hab nur auf dich gewartet!\u201C", p: 0.55, ok: "L schmilzt ein bisschen. \u201EOkay. Aber nur eine Runde.\u201C", no: "L h\xE4lt ihr Handy hoch: \u201EMeine Bildschirmzeit-\xDCberwachung f\xFCr dich sagt was anderes.\u201C" },
+    { t: "\u201EIch war gerade fertig. Ehrlich.\u201C", p: 0.4, ok: "L glaubt es. Diesmal.", no: "L zeigt auf den Bildschirm: \u201EDa steht \u201AN\xE4chstes Spiel startet in 3\u2026\u2018.\u201C" },
+    { daily: "aperol", t: "\u201ELust auf einen Aperol?\u201C", p: 0.85, ok: "L strahlt. Die PlayStation ist vergessen.", no: "L: \u201ENetter Versuch. Erst Controller weg.\u201C" },
+    { daily: "outlet", t: "\u201EWollen wir bald mal wieder ins Outlet?\u201C", p: 0.8, ok: "L ist sofort am Handy und plant die Route.", no: "L: \u201EDas hast du letzte Woche auch gesagt.\u201C" }
+  ];
+  const MEET_L = ["L: \u201EHast du Hummi gesehen?\u201C Er sitzt auf dem Sofa, wie immer.", "L streckt sich: \u201EKurze Pause. Mein Laptop hasst mich.\u201C", "L: \u201EKommst du nachher mit ins Outlet?\u201C", "L summt im Vorbeigehen und klaut Ms Kaffee.", "L: \u201EHast du schon wieder ein Ticket offen?\u201C"];
+  const CUES_M = { wake: ["Im Schlafzimmer klingelt Ls Wecker. Gleich ist sie wach."], pause: ["L klappt im Wohnzimmer den Laptop zu und streckt sich.", "L: \u201EIch mach mal kurz Pause!\u201C"], cook: ["L ruft: \u201EIch fang gleich mit Kochen an!\u201C"], match: ["Gleich ist Ansto\xDF! Hummi zieht sein Trikot an."], outlet: ["L: \u201EGleich geht\u2019s ins Outlet, ja? Du kommst doch mit?\u201C"], city: ["L sucht ihre Handtasche: \u201EIch geh gleich in die Stadt!\u201C"], dinner: ["L: \u201EHast du heute Abend Hunger auf Korean BBQ?\u201C"], bed: ["L g\xE4hnt laut im Wohnzimmer."] };
+  const BEER = `<path d="M-1.6 -10 h3.2 v2 q1.6 1 1.6 3 v6 h-6.4 v-6 q0 -2 1.6 -3z" fill="#7a4a1c"/><rect x="-2.2" y="-4" width="4.4" height="3" fill="#f3e2b0"/>`;
+  const PAD = `<path d="M-6 -3 q0 -3 3 -3 h6 q3 0 3 3 q0 2.4 -2 2.4 l-1.4 -1.2 h-5.2 l-1.4 1.2 q-2 0 -2 -2.4z" fill="#22263a"/><circle cx="2.6" cy="-3.6" r=".7" fill="#ff7d8e"/>`;
+  const PHONE = `<rect x="-2" y="-8" width="4.4" height="7.4" rx="1" fill="#22263a"/><rect x="-1.4" y="-7.2" width="3.2" height="5.6" fill="#b8f27c"/>`;
+  function npcRoomM() {
+    return S.M.ex ? S.M.room : "wohn";
+  }
+  function npcAsleep() {
+    return !!(S.M.ex && (S.M.ex.kind === "wake" && S.M.step === 0 || S.M.ex.kind === "bed" && S.M.step >= 1));
+  }
+  function buildScheduleM(d) {
+    const r = (a, b) => Math.round((a + Math.random() * (b - a)) / 10) * 10, D = DAYS_M[d], ex = [];
+    [[620, 650], [930, 960], [1030, 1060]].forEach((w) => ex.push({ start: r(...w), kind: "pause", steps: [[Math.random() < 0.5 ? "kueche" : "bad", 2, "pause"], ["flur", 1]] }));
+    ex.push({ start: 700, kind: "cook", steps: [["kueche", 2, "cook"], ["kueche", 3, "lunch"]] });
+    if (D.city) ex.push({ start: 900, kind: "city", steps: [["flur", 1, "cityleave"], ["weg", 12, "city"], ["flur", 1, "cityhome"]] });
+    if (D.outlet) ex.push({ start: 880, kind: "outlet", steps: [["flur", 1, "outletask"], ["weg", 10, "shop"], ["flur", 1, "shophome"]] });
+    if (D.match) ex.push({ start: 1110, kind: "match", steps: [["wohn", 11, "match"]] });
+    if (D.dinner) ex.push({ start: 1110, kind: "dinner", steps: [["flur", 1, "dinnerask"], ["weg", 12, "eat"], ["flur", 1, "eathome"]] });
+    ex.sort((a, b) => a.start - b.start);
+    let end = 0;
+    for (const e of ex) {
+      if (e.start < end) e.start = end + 10;
+      end = e.start + e.steps.reduce((s, x) => s + x[1], 0) * TURN;
+    }
+    return ex;
+  }
+  function startDayM(d) {
+    var _a;
+    S.deco = Math.max(S.deco || 1, 1);
+    S.lTV = null;
+    S.lBusy = null;
+    S.busyN = 0;
+    S.beersDay = 0;
+    S.ruffelDay = false;
+    S.callMiss = false;
+    acc = 0;
+    if (paused) setPaused(false);
+    S.day = d;
+    S.t = START_M;
+    S.room = "schlaf";
+    S.ring = null;
+    S.gaming = false;
+    S.watching = false;
+    S.beer = 0;
+    S.matchOn = false;
+    S.game = null;
+    S.aperolM = false;
+    S.battery = Math.max((_a = S.battery) != null ? _a : 100, 40);
+    S.practice = null;
+    S.brokenSeen = {};
+    S.cable = null;
+    S.stash = { gemuese: 1, aperol: 1, golf: 1 };
+    S.dailyEx = [];
+    S.aperolToday = false;
+    S.pushDone = false;
+    S.events = 0;
+    S.used = [];
+    S.coffees = 0;
+    S.psLock = 0;
+    S.M = { room: "schlaf", ex: { kind: "wake", steps: [["schlaf", 15, "sleep"], ["bad", 2, "bath"], ["kueche", 1, "coffee"]] }, step: 0, left: 15, seen: false };
+    S.sched = buildScheduleM(d);
+    S.deliv = DAYS_M[d].deliveries.map((x) => __spreadValues({}, x));
+    if (d > 0) {
+      addSusp(-20);
+      S.battery = 100;
+    }
+    snap = JSON.stringify(S);
+    S.log = [];
+    say("06:00. M steht auf. L schl\xE4ft noch. Die PlayStation schaut ihn erwartungsvoll an.");
+    queue(() => sheet(`<h3>Tag ${d + 1}</h3>${d > 0 ? "<p>\xDCber Nacht hat sich L etwas beruhigt.</p>" : ""}<p>${DAYS_M[d].intro}</p><div class="say">Calls um ${callsText()}. Sei dann im B\xFCro!</div>`, [{ label: "Anpfiff", go: true, fn: done }]));
+    render();
+  }
+  function lEnter(room, turns, tags) {
+    S.M.room = room;
+    S.M.left = turns;
+    if (tags === "match") {
+      S.matchOn = true;
+      bubble("L", "Ich spiel nebenher Glowbies.", 3200);
+      say("Ansto\xDF! L setzt sich mit dem Handy aufs Sofa und spielt Hide and Seek with Glowbies. Hummi tr\xE4gt Trikot.", "good");
+    }
+    if (tags === "cook" && S.stash && S.stash.gemuese > 0 && Math.random() < 0.4) {
+      S.stash.gemuese = 0;
+      addSusp(8);
+      say("Beim Kochen findet L ein Bier im Gem\xFCsefach. \u201EIst das jetzt Gem\xFCse, M?\u201C", "bad");
+    }
+    if (tags === "cook") {
+      bubble("L", "\\m/ Metal an!");
+      say("L kocht und dreht Metal auf. Die T\xF6pfe headbangen mit. Um zw\xF6lf gibt\u2019s Essen, sei p\xFCnktlich!", "cue");
+    }
+    if (tags === "pause" && room === "kueche" && Math.random() < 0.6) say("In der K\xFCche l\xE4uft Metal. L r\xE4umt die Sp\xFClmaschine im Takt aus.", "cue");
+    if (tags === "lunch") {
+      if (S.room === "kueche") {
+        addSusp(-6);
+        bubble("L", pick(["Lass es dir schmecken!", "Na, p\xFCnktlich heute!"]));
+        say("P\xFCnktlich um zw\xF6lf: Essen mit L. Sie ist zufrieden.", "good");
+      } else {
+        addSusp(8);
+        bubble("L", "Das Essen wird kalt!", 3200);
+        say("L sitzt allein am Tisch. \u201EDas Essen wird kalt!\u201C", "bad");
+      }
+    }
+    if (tags === "pause") bubble("L", pick(["Kurze Pause!", "Kaffee\u2026", "Mein Laptop hasst mich."]));
+    if (tags === "outletask") outletScene();
+    if (tags === "dinnerask") dinnerScene();
+    if (tags === "shophome") {
+      bubble("L", "Schau mal, alles reduziert!", 3200);
+      S.deco = 3;
+      say("L ist zur\xFCck aus dem Outlet. \u201EAlles reduziert!\u201C Und sie hat Hummer-Deko gefunden. F\xFCr dein B\xFCro.", "cue");
+    }
+    if (tags === "cityleave") {
+      bubble("L", "Ich nehm den Fiat!");
+      say("L nimmt den Fiat und f\xE4hrt allein in die Stadt, Kleidung und Deko shoppen. Zwei Stunden sturmfrei! Aber Ms Handy liegt bereit\u2026", "good");
+      S.pushes = 0;
+    }
+    if (tags === "cityhome") {
+      bubble("L", "Ich hab fast nichts gekauft!", 3200);
+      S.spentL = (S.spentL || 0) + 1;
+      S.deco = Math.min(3, (S.deco || 1) + 1);
+      say("L ist zur\xFCck aus der Stadt. Drei T\xFCten Kleidung und eine T\xFCte Deko. Zehn Minuten sp\xE4ter h\xE4ngt im Schlafzimmer eine Hummer-Lichterkette.", "cue");
+    }
+    if (tags === "sleep" && S.M.ex.kind === "bed") {
+      bubble("L", "Gute Nacht\u2026 mach nicht zu lang.", 3200);
+      say("21:30. L geht schlafen. \u201EMach nicht mehr so lang, ja?\u201C Die Nacht geh\xF6rt M und Hummi.", "good");
+    }
+  }
+  function npcTickM() {
+    const M = S.M;
+    if (M.ex) {
+      M.left--;
+      if (M.left <= 0) {
+        M.step++;
+        if (M.step >= M.ex.steps.length) {
+          if (M.ex.kind === "match") {
+            S.matchOn = false;
+            S.watching = false;
+            say("Abpfiff. L steht auf: \u201EWar\u2019s gut?\u201C", "cue");
+          }
+          M.ex = null;
+          M.room = "wohn";
+          M.seen = false;
+          return;
+        }
+        const st = M.ex.steps[M.step];
+        lEnter(st[0], st[1], st[2]);
+      }
+      return;
+    }
+    const e = S.sched.find((x) => x.start <= S.t && !x.used);
+    if (e) {
+      e.used = true;
+      M.ex = e;
+      M.step = 0;
+      M.seen = false;
+      const st = e.steps[0];
+      lEnter(st[0], st[1], st[2]);
+      return;
+    }
+    const soon = S.sched.find((x) => x.start === S.t + 2 * TURN && !x.used);
+    if (soon && CUES_M[soon.kind]) say(pick(CUES_M[soon.kind]), "cue");
+  }
+  function tickM() {
+    var _a;
+    S.t += TURN;
+    const d = S.deliv.find((x) => x.t === S.t && !x.done);
+    if (d) {
+      d.done = true;
+      S.ring = { n: d.n, left: 2 };
+      say("Es klingelt! Ein Paket f\xFCr L. Es klappert verd\xE4chtig.", "cue");
+    }
+    npcTickM();
+    if (S.t === 490) say(pick(CUES_M.wake), "cue");
+    if (CALLS.includes(S.t + 2 * TURN)) say("In 20 Minuten ist dein Call. Ab ins B\xFCro!", "cue");
+    if (CALLS.includes(S.t)) {
+      if (S.room === "arbeit" && S.beer) {
+        S.fun = Math.max(0, S.fun - 3);
+        bubble("M", "\xC4hm\u2026 alkoholfrei!", 3200);
+        S.ruffelDay = true;
+        say("Der Chef im Call: \u201EM, ist das\u2026 ein Bier?\u201C Verweis! Minus drei Freizeitpunkte.", "bad");
+      } else if (S.room === "arbeit") {
+        S.fun += 2;
+        bubble("M", pick(["Du bist auf stumm!", "Siehst du meinen Bildschirm?", "Kurze Frage\u2026"]));
+        say(metalOn() ? "Im Call h\xF6rt man Metal aus der K\xFCche. Der Chef: \u201EGeile Mucke, M.\u201C" : "M ist p\xFCnktlich im Call. Der Chef nickt anerkennend.", "good");
+      } else {
+        S.callMiss = true;
+        S.fun = Math.max(0, S.fun - 5);
+        S.gaming = false;
+        say("M fehlt im Call. Der Chef: \u201EIst M noch da?\u201C Minus f\xFCnf Freizeitpunkte.", "bad");
+      }
+    }
+    if (S.gaming && S.room === "wohn") {
+      S.battery = Math.max(0, S.battery - (S.game === "golf" ? 6 : 9));
+      if (S.battery <= 0) {
+        S.gaming = false;
+        S.cable = pick(["schlaf", "flur", "kueche", "bad"]);
+        bubble("M", "Akku leer!!", 3e3);
+        say(`Controller-Akku leer! Das Ladekabel? L hat es f\xFCr ihre Hummer-Lichterkette benutzt. Es liegt irgendwo im ${ROOMS[S.cable].n}.`, "bad");
+      } else if (S.battery <= 20 && S.battery + 9 > 20) say("Der Controller blinkt rot. Akku fast leer.", "cue");
+    }
+    if (S.gaming && S.room === "wohn") {
+      S.fun += S.game === "golf" ? 1 : 2;
+      if (npcAsleep() && Math.random() < 0.08) {
+        addSusp(6);
+        say("Aus dem Schlafzimmer: \u201EMach leiser!\u201C", "bad");
+      }
+    }
+    if (S.watching && S.matchOn && S.room === "wohn") {
+      S.fun += 3;
+      addSusp(S.beer ? 1 : -1);
+      if (Math.random() < 0.12) {
+        bubble("M", "TOOOR!", 2500);
+        bubble("L", pick(["Psst, ich bin gleich im n\xE4chsten Level!", "Sch\xF6n f\xFCr dich, Schatz."]), 2800);
+        say("Tor f\xFCr Arminia! M springt auf. Hummi f\xE4llt fast vom Sofa.", "good");
+      }
+    }
+    if (S.beer) {
+      const bonus = S.gaming || S.watching && S.matchOn ? 2 : 1;
+      S.fun += bonus;
+      S.beerGot = (S.beerGot || 0) + bonus;
+      S.beerSips = ((_a = S.beerSips) != null ? _a : 3) - 1;
+      if (S.beerSips <= 0) {
+        S.beer = 0;
+        say(`Bier leer. +${S.beerGot} Freizeitpunkte. ${S.gaming || S.watching ? "Zum Zocken schmeckt\u2019s doppelt." : "Noch eins?"}`, "good");
+        S.beerGot = 0;
+      }
+    }
+    if (S.practice) {
+      if (S.room !== S.practice) {
+        S.practice = null;
+      } else {
+        S.fun += 2;
+        if (Math.random() < 0.2) {
+          const r = S.room;
+          S.broken = S.broken || {};
+          const hadDeco = r === "wohn" || (S.deco || 1) >= 2 && r === "flur";
+          if (hadDeco && !S.broken[r]) {
+            S.broken[r] = true;
+            bubble("M", "Ups\u2026", 2600);
+            say((r === "wohn" ? "KLIRR! Der Chip-Shot trifft die Hummer-Lichterkette. Zwei Hummer baumeln schief." : "PLONK! Der Ball rei\xDFt die Hummer-Wimpelkette halb runter.") + " Wenn L das sieht, ist es der Super-GAU. Schnell reparieren!", "bad");
+          } else {
+            bubble("M", "Fore!");
+            say(pick(["Der Ball trifft die Wanduhr. Sie geht jetzt f\xFCnf Minuten vor.", "Der Ball rollt unters Sofa. Hummi bewacht ihn.", "R\xFCdiger saugt den Golfball ein. Er hustet."]), "cue");
+          }
+        }
+      }
+    }
+    if (S.psLock > 0) S.psLock--;
+    if (S.ring) {
+      if (S.room === "flur") takeRing();
+      else if (--S.ring.left <= 0) {
+        bubble("L", "Meins!");
+        S.spentL = (S.spentL || 0) + 1;
+        say("L hat das Paket selbst angenommen. Drei neue Glowbies ziehen ein.", "cue");
+        S.ring = null;
+      }
+    }
+    if (S.M.ex && S.M.ex.kind === "city" && S.M.room === "weg" && (S.pushes || 0) < 2 && Math.random() < 0.25) {
+      S.pushes = (S.pushes || 0) + 1;
+      pushScene();
+    }
+    if (S.M.ex) S.lBusy = null;
+    if (S.lBusy) {
+      if (--S.lBusy.left <= 0) {
+        S.lBusy = null;
+        say("L legt auf. \u201EWo war ich? Ach ja, ausmisten.\u201C Sie mistet nicht aus.", "cue");
+      } else if (Math.random() < 0.35) bubble("L", pick(["Nein! Echt jetzt?!", "Erz\xE4hl!", "Und was hat S dann gesagt?", "Ich mist morgen aus. Bestimmt."]));
+    } else if (!S.M.ex && !S.matchOn && S.t >= 570 && S.t < 1200 && (S.busyN || 0) < 2 && Math.random() < 0.06) {
+      S.busyN = (S.busyN || 0) + 1;
+      const k = Math.random() < 0.5 ? "freundin" : "tratsch";
+      S.lBusy = { kind: k, left: 5 + (Math.random() * 3 | 0) };
+      say(k === "freundin" ? "L schaut ein Decluttering-Video auf YouTube: \u201EBehalte nur, was Freude bringt.\u201C F\xFCnf Minuten sp\xE4ter telefoniert sie stattdessen mit ihrer Freundin. L ist abgelenkt!" : "L hat einen Tratsch-Termin mit Kollege S. Kamera aus, Kaffee an, Ohren auf. L ist abgelenkt!", "good");
+      bubble("L", k === "freundin" ? "Hiii! Du glaubst nicht\u2026" : "S! Erz\xE4hl alles!");
+    }
+    if (!S.M.ex && S.t >= 1230 && !S.lTV && !S.matchOn) {
+      S.lTV = Math.random() < 0.55 ? "aoe" : "crime";
+      if (S.lTV === "aoe") {
+        bubble("L", "Wololo!");
+        say("L hat sich die PlayStation geschnappt und zockt Age of Empires. Die PlayStation ist besetzt.", "cue");
+      } else say("L schaut eine True-Crime-Doku. Spannende Musik. M setzt sich lieber nicht dazu.", "cue");
+    }
+    if (S.M.ex) S.lTV = null;
+    if (S.lTV === "aoe" && S.room === "wohn" && Math.random() < 0.2) bubble("L", pick(["Wololo!", "Nur noch eine Runde!", "Ich teste nur, ob der Controller geht."]));
+    maybeEvent();
+    meetCheck();
+    if (S.t >= END_M && !busy) nightM();
+  }
+  function meetCheckM() {
+    const nr = npcRoomM();
+    if (nr !== S.room || nr === "weg" || npcAsleep()) {
+      S.M.seen = false;
+      return;
+    }
+    if (S.practice && S.room === nr && !S.lBusy) {
+      S.practice = null;
+      S.M.seen = true;
+      addSusp(8);
+      bubble("L", "Nicht in der Wohnung!!", 3200);
+      say("L kommt rein, als M gerade ausholt. \u201ENicht. In. Der. Wohnung.\u201C", "bad");
+      return;
+    }
+    if (S.broken && S.broken[nr] && !(S.brokenSeen || {})[nr]) {
+      S.brokenSeen = __spreadProps(__spreadValues({}, S.brokenSeen || {}), { [nr]: true });
+      return superGau(nr);
+    }
+    if (S.fixedOdd && S.fixedOdd[nr]) {
+      delete S.fixedOdd[nr];
+      addSusp(8);
+      bubble("L", "Warum h\xE4ngt der Hummer kopf\xFCber?", 3200);
+      say("L bleibt stehen. Ein Hummer der Lichterkette h\xE4ngt kopf\xFCber. Sie schaut M an. M schaut weg.", "bad");
+    }
+    if (S.lBusy) return;
+    if (S.M.seen) return;
+    S.M.seen = true;
+    if (S.gaming && !S.matchOn) return caughtGaming();
+    if (S.aperolM) {
+      addSusp(-6);
+      bubble("L", "Endlich trinkst du was Vern\xFCnftiges!");
+      say("L sieht M mit einem Aperol. Sie ist ger\xFChrt.", "good");
+      return;
+    }
+    if (S.beer) {
+      addSusp(6);
+      bubble("L", pick(["Schon wieder Bier?", "Und mein Aperol?"]));
+      say("L schaut auf Ms Bier. \u201EUnd mein Aperol?\u201C", "bad");
+      return;
+    }
+    say(pick(MEET_L));
+    bubble("L", pick(["Na?", "Hey du.", "Huhu."]));
+  }
+  function superGau(r) {
+    S.practice = null;
+    S.gaming = false;
+    bubble("L", "MEINE HUMMER-DEKO!!!", 4e3);
+    queue(() => sheet(`<h3>Der Super-GAU</h3>${duo("!")}<div class="say">L steht im ${ROOMS[r].n}. Die Hummer-${r === "wohn" ? "Lichterkette" : "Wimpelkette"} h\xE4ngt in Fetzen. Zwei Hummer liegen auf dem Boden. Daneben: ein Golfball.</div><div class="say"><b class="lq">L:</b> \u201E\u2026\u201C</div><p>Sie sagt nichts. Gar nichts. Hummi dreht sich zur Wand. Was macht M?</p>`, [
+      { label: "\u201EDas war Hummi!\u201C", fn: () => {
+        const w = Math.random() < 0.3;
+        addSusp(w ? 18 : 42);
+        sheet(`<h3>${w ? "Unglaublich." : "Nat\xFCrlich nicht."}</h3><div class="say">${w ? 'L schaut Hummi lange an. Hummi schaut unschuldig zur\xFCck. <b class="lq">L:</b> \u201EHummi, wir reden sp\xE4ter.\u201C' : '<b class="lq">L:</b> \u201EHummi kann keinen Golfschl\xE4ger halten, M. Er hat Scheren.\u201C Hummi ist zutiefst gekr\xE4nkt.'}</div>`, [{ label: "Weiter", go: true, fn: doneM }]);
+      } },
+      { label: "\u201EIch kauf dir neue. Im Outlet.\u201C", go: true, fn: () => {
+        addSusp(24);
+        S.spar = Math.max(0, S.spar - 6);
+        sheet(`<h3>Verhandlung</h3><div class="say"><b class="lq">L:</b> \u201EDrei. Und eine mit Glitzer.\u201C</div><p>M nickt. Die Sparpunkte schmelzen.</p>`, [{ label: "Weiter", go: true, fn: doneM }]);
+      } },
+      { label: "Schweigend Hummi \xFCberreichen", fn: () => {
+        const w = Math.random() < 0.5;
+        addSusp(w ? 16 : 38);
+        sheet(`<h3>${w ? "Es wirkt." : "Es wirkt nicht."}</h3><div class="say">${w ? "L dr\xFCckt Hummi an sich. Sehr fest. Das Schlimmste ist \xFCberstanden." : "L nimmt Hummi und geht mit ihm aus dem Raum. Beide sprechen heute nicht mehr mit M."}</div>`, [{ label: "Weiter", go: true, fn: doneM }]);
+      } }
+    ]));
+    S.psLock = Math.max(S.psLock, 6);
+  }
+  function caughtGaming() {
+    if (S.game === "golf" && Math.random() < 0.5) {
+      S.gaming = false;
+      addSusp(3);
+      bubble("L", "Golf? Na gut, das ist ja fast Sport.", 3200);
+      say("L sieht das Golfspiel und zuckt mit den Schultern.", "good");
+      return;
+    }
+    S.gaming = false;
+    bubble("L", "Ernsthaft?!", 3200);
+    queue(() => {
+      const opts = EXCUSES_M.filter((e) => !(e.daily && (S.dailyEx || []).includes(e.daily)));
+      const three = [];
+      while (three.length < 3 && opts.length) three.push(opts.splice(Math.random() * opts.length | 0, 1)[0]);
+      sheet(
+        `<h3>Erwischt beim Zocken!</h3>${duo("!")}<div class="say">L steht in der T\xFCr und schaut auf den Fernseher. Dann auf M. Dann wieder auf den Fernseher. <b class="lq">L:</b> \u201EErnsthaft? Schon wieder?\u201C</div><p>Was sagt M?</p>`,
+        three.map((e) => ({ label: e.t, fn: () => {
+          if (e.daily) S.dailyEx = [...S.dailyEx || [], e.daily];
+          const win = Math.random() < e.p;
+          addSusp(win ? 4 : 20);
+          if (!win) S.psLock = 3;
+          sheet(`<h3>${win ? "Gl\xFCck gehabt." : "Autsch."}</h3><div class="say"><b>M:</b> ${e.t}</div><div class="say">${win ? e.ok : e.no}</div><p>${win ? "L ist nur ein bisschen genervt." : "L ist deutlich genervt. Die PlayStation hat 30 Minuten Pause."}</p>`, [{ label: "Weiter", go: true, fn: doneM }]);
+        } }))
+      );
+    });
+  }
+  const doneM = () => {
+    if (S.susp >= 100) return gameOverM();
+    nextModal();
+  };
+  function takeRingM() {
+    const n = S.ring.n;
+    S.ring = null;
+    queue(() => sheet(`<h3>Paket f\xFCr L</h3>${duo(GB)}<div class="say">Der Paketbote dr\xFCckt M ein Paket in die Hand. Absender: Glowbie-Shop. Es klappert. Gr\xFCn.</div><p>Was macht M?</p>`, [
+      { label: "L geben, sie freut sich", go: true, fn: () => {
+        addSusp(-8);
+        S.spentL = (S.spentL || 0) + 1;
+        bubble("L", "Danke, Schatz!");
+        say("M bringt L das Paket. Sie strahlt. \u201EDu bist der Beste.\u201C", "good");
+        doneM();
+      } },
+      { label: "\u201EBrauchst du das wirklich?\u201C (zur\xFCckschicken)", fn: () => {
+        S.spar += 8;
+        addSusp(12);
+        say("M klebt das Paket wieder zu. Sparpunkte! L wird das nicht lustig finden.", "bad");
+        doneM();
+      } },
+      { label: "Erstmal in der Golftasche \u201Evergessen\u201C", fn: () => {
+        S.spar += 4;
+        if (Math.random() < 0.35) {
+          addSusp(15);
+          say("L sucht ihr Paket und findet es in der Golftasche. Stille.", "bad");
+        } else say("Das Paket liegt jetzt zwischen Holz 3 und Eisen 7. F\xFCrs Erste.");
+        doneM();
+      } }
+    ]));
+  }
+  function pushScene() {
+    const what = pick(PUSHES);
+    queue(() => sheet(`<h3>Push-Nachricht</h3><div class="say">Ms Handy vibriert: \u201EKartenzahlung L: ${what}.\u201C</div><p>Was macht M?</p>`, [
+      { label: "\u201EBrauchst du das wirklich?\u201C schreiben", go: true, fn: () => {
+        S.spar += 3;
+        addSusp(6);
+        bubble("L", "Ja. Brauch ich.");
+        say("L antwortet nur: \u201EJa.\u201C Zehn Minuten sp\xE4ter kommt die n\xE4chste Push-Nachricht.", "bad");
+        doneM();
+      } },
+      { label: "Ignorieren und Arminia-Tabelle checken", fn: () => {
+        addSusp(-2);
+        say("M scrollt durch die Tabelle. Es ist besser, nichts zu wissen.");
+        doneM();
+      } }
+    ]));
+  }
+  function skipAway(back) {
+    S.gaming = false;
+    S.watching = false;
+    S.room = "weg";
+    S.evening = true;
+    for (let k = 0; k < 20 && !(S.M.ex && S.M.step >= 2); k++) tickM();
+    S.room = "flur";
+    S.evening = false;
+    acc = 0;
+    say(back, "good");
+  }
+  function outletScene() {
+    queue(() => sheet(`<h3>Outlet?</h3>${duo("<span>&amp;</span>")}<div class="say"><b class="lq">L:</b> \u201EKomm, ab ins Outlet! Nur kurz schauen.\u201C</div><p>Ins Outlet geht M gern mit, da findet er auch immer was.</p>`, [
+      { label: "Klar, ich komm mit!", go: true, fn: () => {
+        addSusp(-15);
+        S.fun += 6;
+        S.deco = 3;
+        skipAway("Zur\xFCck aus dem Outlet: zwei neue Pullis f\xFCr M, drei T\xFCten f\xFCr L, ein Schn\xE4ppchen-Golfpolo und eine Hummer-Lichterkette. F\xFCr Ms B\xFCro. Er protestiert nur kurz.");
+        doneM();
+      } },
+      { label: "\u201EHeute nicht, Saisonfinale\u2026\u201C", fn: () => {
+        addSusp(12);
+        say("L f\xE4hrt allein ins Outlet. Sturmfrei, aber L ist entt\xE4uscht.", "bad");
+        doneM();
+      } }
+    ]));
+  }
+  function dinnerScene() {
+    queue(() => sheet(`<h3>Korean BBQ?</h3>${duo("<span>&amp;</span>")}<div class="say"><b class="lq">L:</b> \u201ELass uns essen gehen! Korean BBQ?\u201C</div>`, [
+      { label: "Ab in den Fiat!", go: true, fn: () => {
+        addSusp(-15);
+        skipAway("Satt und zufrieden zur\xFCck vom Korean BBQ. L ist bester Laune.");
+        doneM();
+      } },
+      { label: "\u201ELieber Pizza und zocken?\u201C", fn: () => {
+        addSusp(15);
+        S.psLock = 8;
+        if (S.M.ex) S.M.ex.steps = [["flur", 1, "dinnerask"], ["wohn", 12, "sulk"], ["flur", 1]];
+        say("L setzt sich beleidigt aufs Sofa und blockiert den Fernseher. Sie spielt Hide and Seek with Glowbies. Laut.", "bad");
+        doneM();
+      } }
+    ]));
+  }
+  function nightM() {
+    queue(() => {
+      const last = S.day === DAYS_M.length - 1;
+      if ((S.beersDay || 0) >= 3 && !S.ruffelDay) ach("ruffel");
+      if (CALLS.length && !S.callMiss && !S.ruffelDay) ach("calls");
+      sheet(
+        `<h3>Tag ${S.day + 1} geschafft</h3><p>22:00. M geht fr\xFCh ins Bett. L bleibt noch wach. ${S.lTV === "aoe" ? "Aus dem Wohnzimmer h\xF6rt man leise: \u201EWololo.\u201C" : "Im Wohnzimmer l\xE4uft True Crime. M schl\xE4ft lieber schnell ein."}</p>
+      <div class="stat"><span>Freizeitpunkte</span><span>${S.fun}</span><span>Sparpunkte</span><span>${S.spar}</span><span>Ls Genervtheit</span><span>${S.susp} %</span></div>${achToday()}`,
+        [{ label: last ? "Zum Finale" : "Schlafen bis morgen", go: true, fn: () => {
+          if (last) return finaleM();
+          modalQueue = [];
+          busy = false;
+          startDayM(S.day + 1);
+        } }]
+      );
+    });
+  }
+  function gameOverM() {
+    modalQueue = [];
+    busy = true;
+    $("modal").hidden = false;
+    sheet(
+      `<h3>Stecker gezogen!</h3>${duo(PAD)}<div class="say">L zieht den Stecker der PlayStation und nimmt ihn mit ins Schlafzimmer. <b class="lq">L:</b> \u201EWir m\xFCssen reden. \xDCber Aperol.\u201C</div><p>Ls Genervtheit hat 100 % erreicht.</p>`,
+      [
+        { label: `Tag ${S.day + 1} nochmal versuchen`, go: true, fn: () => {
+          S = JSON.parse(snap);
+          S.log = [];
+          say("Zweiter Versuch. Diesmal mit Aperol im K\xFChlschrank.");
+          busy = false;
+          modalQueue = [];
+          $("modal").hidden = true;
+          render();
+        } },
+        { label: "Ganz von vorn", fn: () => {
+          busy = false;
+          modalQueue = [];
+          begin();
+        } }
+      ]
+    );
+  }
+  function finaleM() {
+    const sc = S.fun + S.spar;
+    const rank = sc >= 140 ? "Couch-Kapit\xE4n" : sc >= 95 ? "Joypad-Legende" : sc >= 55 ? "Sofa-Diplomat" : "Bankdr\xFCcker";
+    sheet(
+      `<h3>Nachspielzeit</h3>${duo(GB)}
+    <p>22:00. M liegt schon im Bett und schaut auf dem Handy nochmal die Zusammenfassung. 93. Minute, Ecke Arminia, Kopfball \u2026 TOOOR! M jubelt so laut, dass L aus dem Wohnzimmer angerannt kommt.</p>
+    <p>Sie steht im T\xFCrrahmen, in der Hand eine T\xFCte aus dem Outlet. Darin: ein neues Arminia-Trikot. In Hummi-Gr\xF6\xDFe.</p>
+    <div class="say"><b class="lq">L:</b> \u201EIm Sale gekauft. Brauchst du das wirklich?\u201C</div><div class="say"><b>M:</b> \u201E\u2026Ja.\u201C</div>
+    <div class="stat"><span>Freizeitpunkte</span><span>${S.fun}</span><span>Sparpunkte</span><span>${S.spar}</span><span>Titel</span><span>${rank}</span></div>${scoreBlock("M", S.fun + S.spar + Math.round(Math.max(0, 100 - S.susp) / 2), rank)}`,
+      finaleButtons("M", S.fun + S.spar + Math.round(Math.max(0, 100 - S.susp) / 2), rank)
+    );
+  }
+  function actsM() {
+    const nr = npcRoomM(), lHere = nr === S.room && !npcAsleep() && nr !== "weg" && !S.lBusy;
+    let h = `<h2><span>${ROOMS[S.room].n}${lHere ? " \xB7 L ist hier!" : ""}</span><small>Raum wechseln: Grundriss antippen</small></h2><div class="row">`;
+    if (S.room === "wohn") {
+      if (S.matchOn) h += S.watching ? `<button class="btn" id="m-stopw" data-m="stopw">Spiel aus</button>` : `<button class="btn go" id="m-watch" data-m="watch">Arminia schauen</button>`;
+      else if (S.gaming) h += `<button class="btn" id="m-stopg" data-m="stopg">Schnell umschalten!</button>`;
+      else if (S.practice) {
+      } else {
+        const blk = S.psLock > 0 || lHere || S.lTV || S.battery <= 0;
+        const why = S.psLock > 0 ? "PlayStation gesperrt" : S.lTV === "aoe" ? "L zockt AoE\u2026" : S.lTV === "crime" ? "L schaut True Crime\u2026" : lHere ? "L sitzt hier\u2026" : S.battery <= 0 ? "Akku leer" : "";
+        h += blk ? `<button class="btn" id="m-game" disabled>${why}</button>` : `<button class="btn go" id="m-game" data-m="game">EA FC</button><button class="btn go" id="m-golf" data-m="golf">Golfspiel</button>`;
+      }
+    }
+    if (S.room === "kueche" && !S.beer && !S.aperolM) {
+      h += `<button class="btn" id="m-beer" data-m="beer">Bier aus dem K\xFChlschrank</button>`;
+      if (S.stash.gemuese > 0) h += `<button class="btn" id="m-sg" data-m="sg">Bier aus dem Gem\xFCsefach</button>`;
+      if (S.stash.aperol > 0) h += `<button class="btn" id="m-sa" data-m="sa">Bier hinterm Aperol</button>`;
+      h += `<button class="btn" id="m-ap" data-m="ap">Aperol statt Bier</button>`;
+    }
+    if (S.room === "flur" && !S.beer && !S.aperolM && S.stash.golf > 0) h += `<button class="btn" id="m-sgo" data-m="sgo">Bier aus der Golftasche</button>`;
+    if (S.broken && S.broken[S.room] && !(S.brokenSeen || {})[S.room] && !lHere) h += `<button class="btn go" id="m-fix" data-m="fix">Hummer-Deko reparieren!</button>`;
+    if (S.cable && S.room === S.cable) h += `<button class="btn go" id="m-cable" data-m="cable">Ladekabel holen</button>`;
+    if (S.aperolM) h += `<button class="btn" id="m-apx" data-m="apx">Aperol austrinken</button>`;
+    if (S.beer) h += `<button class="btn" id="m-drop" data-m="drop">Bier wegstellen</button>`;
+    if (lHere && S.t >= 1020 && !S.aperolToday) h += `<button class="btn go" id="m-aperol" data-m="aperol">Aperol mit L</button>`;
+    if ((S.room === "flur" || S.room === "wohn") && !S.gaming && !S.watching && !S.matchOn) h += S.practice ? `<button class="btn" id="m-pstop" data-m="pstop">Schl\xE4ger weg</button>` : `<button class="btn go" id="m-prac" data-m="prac" ${lHere ? "disabled" : ""}>${S.room === "flur" ? "Putten \xFCben" : "Chippen \xFCben"}</button>`;
+    if (S.room === "arbeit") h += `<span style="color:var(--muted);font-size:.8rem;align-self:center">Calls um ${callsText()}</span>`;
+    return h + `</div>`;
+  }
+  function onActM(k) {
+    if (k === "game") act(() => {
+      S.gaming = true;
+      S.game = "fc";
+      bubble("M", pick(["Nur eine Runde.", "Anpfiff!", "Endlich."]));
+      say("M startet EA FC. Nur eine Runde. Ganz bestimmt.");
+    });
+    else if (k === "golf") act(() => {
+      S.gaming = true;
+      S.game = "golf";
+      bubble("M", pick(["Fore!", "Schwung\u2026 und durch!", "Naturtalent."]));
+      say("M startet das Golfspiel. Weniger Punkte, aber L findet: Golf ist ja fast Sport.");
+    });
+    else if (k === "cable") act(() => {
+      S.cable = null;
+      S.battery = 100;
+      bubble("M", "Hab\u2019s!");
+      say("M zieht das Ladekabel aus der Hummer-Lichterkette. Der Controller ist voll. Die Hummer sind jetzt dunkel.");
+    });
+    else if (k === "sg") act(() => {
+      S.stash.gemuese = 0;
+      S.beer = 1;
+      S.beersDay = (S.beersDay || 0) + 1;
+      if (S.beersDay >= 3) ach("bier");
+      S.beerSips = 3;
+      S.beerGot = 0;
+      say("M holt ein Bier aus dem Gem\xFCsefach. Zwischen Gurke und Paprika f\xE4llt es kaum auf.");
+    });
+    else if (k === "sa") act(() => {
+      S.stash.aperol = 0;
+      S.beer = 1;
+      S.beersDay = (S.beersDay || 0) + 1;
+      if (S.beersDay >= 3) ach("bier");
+      S.beerSips = 3;
+      S.beerGot = 0;
+      worldBubble("aperol", ox("kueche") + 92, oy("kueche") + 30, "Verr\xE4ter!", 2600);
+      say("M holt das Bier hinter der Aperolflasche hervor. Die Flasche f\xFChlt sich benutzt.");
+    });
+    else if (k === "sgo") act(() => {
+      S.stash.golf = 0;
+      S.beer = 1;
+      S.beersDay = (S.beersDay || 0) + 1;
+      if (S.beersDay >= 3) ach("bier");
+      S.beerSips = 3;
+      S.beerGot = 0;
+      say("M zieht ein Bier aus der Golftasche, zwischen Holz 3 und Eisen 7. Gut gek\xFChlt ist es nicht.");
+    });
+    else if (k === "ap") act(() => {
+      S.aperolM = true;
+      bubble("M", "\u2026schmeckt wie Orangen-Zahnpasta.", 3200);
+      worldBubble("aperol", ox("kueche") + 92, oy("kueche") + 30, "Endlich!", 2600);
+      say("M gie\xDFt sich einen Aperol ein. Er verzieht das Gesicht, aber L wird begeistert sein.");
+    });
+    else if (k === "apx") act(() => {
+      S.aperolM = false;
+      addSusp(-3);
+      say("M trinkt tapfer aus. Er bereut nichts. Fast nichts.");
+    });
+    else if (k === "stopg") act(() => {
+      S.gaming = false;
+      addSusp(-2);
+      say("M schaltet hektisch auf eine Marie-Kondo-Folge um. Das wird L gefallen.", "good");
+    }, 400);
+    else if (k === "watch") act(() => {
+      S.watching = true;
+      ach("arminia");
+      bubble("M", "Komm schon, Arminia!");
+    });
+    else if (k === "stopw") act(() => {
+      S.watching = false;
+    });
+    else if (k === "beer") act(() => {
+      if (npcRoomM() === "kueche" && !npcAsleep()) {
+        addSusp(4);
+        bubble("L", "Um diese Uhrzeit?");
+      }
+      S.beer = 1;
+      S.beersDay = (S.beersDay || 0) + 1;
+      if (S.beersDay >= 3) ach("bier");
+      S.beerSips = 3;
+      S.beerGot = 0;
+      worldBubble("aperol", ox("kueche") + 92, oy("kueche") + 30, "Und ich?!", 2600);
+      say("M holt sich ein Bier. Die Aperolflasche schaut beleidigt.");
+    });
+    else if (k === "fix") act(() => {
+      const r = S.room;
+      ach("retter");
+      S.broken[r] = false;
+      if (Math.random() < 0.4) {
+        S.fixedOdd = __spreadProps(__spreadValues({}, S.fixedOdd || {}), { [r]: true });
+        say("Repariert mit Sekundenkleber und Kabelbindern. Nur ein Hummer h\xE4ngt jetzt kopf\xFCber. F\xE4llt bestimmt nicht auf.", "cue");
+      } else say("Repariert mit Sekundenkleber und Kabelbindern. Sieht aus wie vorher. Fast.", "good");
+      bubble("M", "Puh.");
+    }, 2200);
+    else if (k === "prac") act(() => {
+      S.practice = S.room;
+      bubble("M", pick(["Schwung\u2026 und durch!", "H\xFCfte! H\xFCfte!", "Naturtalent."]));
+      say(S.room === "flur" ? "M holt den Putter aus der Golftasche und puttet in die Kaffeetasse." : "M chippt im Wohnzimmer. Die Hummer-Lichterkette zittert vor Angst.");
+    });
+    else if (k === "pstop") act(() => {
+      S.practice = null;
+      say("M stellt den Schl\xE4ger zur\xFCck. Unschuldig pfeifend.");
+    });
+    else if (k === "drop") act(() => {
+      S.beer = 0;
+      say("M stellt das Bier weg. Vorerst.");
+    });
+    else if (k === "aperol") act(() => {
+      S.aperolToday = true;
+      addSusp(-18);
+      S.fun += 2;
+      bubble("L", "Endlich!");
+      bubble("M", "Prost!");
+      say("M und L trinken zusammen einen Aperol. L ist rundum gl\xFCcklich.", "good");
+    });
+  }
+  let DBX = null, USR = null, MYID = null, CANW = null;
+  (async () => {
+    try {
+      if (!window.claude || !window.claude.use) return;
+      DBX = await window.claude.use("db");
+      USR = await window.claude.use("user");
+      if (USR) {
+        MYID = await USR.id();
+        CANW = await USR.can("data.write");
+      }
+    } catch (e) {
+    }
+  })();
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  function localBest() {
+    try {
+      return JSON.parse(localStorage.getItem("glowbies-best") || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+  function lastNick() {
+    try {
+      return localStorage.getItem("glowbies-nick") || "";
+    } catch (e) {
+      return "";
+    }
+  }
+  async function submitScore(mode, score, title, nick) {
+    nick = (nick || "").trim().slice(0, 20) || (mode === "L" ? "L" : "M");
+    try {
+      const all = localBest();
+      (all[mode] = all[mode] || []).push({ nick, score, title, at: Date.now() });
+      all[mode].sort((a, b) => b.score - a.score);
+      all[mode] = all[mode].slice(0, 10);
+      localStorage.setItem("glowbies-best", JSON.stringify(all));
+      localStorage.setItem("glowbies-nick", nick);
+    } catch (e) {
+    }
+    if (!DBX || !MYID) return "device";
+    if (CANW === false) return "local";
+    try {
+      const ref = DBX.collection("scores").doc(MYID);
+      const snap2 = await ref.get();
+      const cur = snap2.exists ? __spreadValues({}, snap2.data()) : {};
+      const k = "best" + mode;
+      if (!cur[k] || score > cur[k]) {
+        cur[k] = score;
+        cur["title" + mode] = title;
+        cur["at" + mode] = Date.now();
+      }
+      cur.nick = nick;
+      await ref.set(cur);
+      return "shared";
+    } catch (e) {
+      CANW = false;
+      return "local";
+    }
+  }
+  function cleanNick(n) {
+    return (n || "").normalize("NFKD").replace(/[^A-Za-z0-9ÄÖÜäöüß]/g, "").slice(0, 16) || "Anonym";
+  }
+  function chk(mode, score, nick) {
+    let h = 7;
+    const t = `${mode}|${score}|${nick}|hummi-glowbies`;
+    for (const c of t) h = h * 31 + c.charCodeAt(0) >>> 0;
+    return h.toString(36).toUpperCase().slice(-3).padStart(3, "0");
+  }
+  function makeCode(mode, score, nick) {
+    nick = cleanNick(nick);
+    return `${mode}-${score}-${nick}-${chk(mode, score, nick)}`;
+  }
+  function parseCode(code) {
+    const m = (code || "").trim().match(/^([LM])-(\d{1,4})-([A-Za-z0-9ÄÖÜäöüß]{1,16})-([0-9A-Z]{3})$/i);
+    if (!m) return null;
+    const mode = m[1].toUpperCase(), score = +m[2], nick = m[3];
+    return chk(mode, score, nick) === m[4].toUpperCase() ? { mode, score, nick } : null;
+  }
+  async function addByCode(code) {
+    const c = parseCode(code);
+    if (!c) return "Der Code stimmt nicht. Bitte genau so eingeben, wie er geschickt wurde.";
+    if (!DBX) return "Die gemeinsame Liste ist hier gerade nicht erreichbar.";
+    try {
+      const ref = DBX.collection("scores").doc("c_" + c.nick.toLowerCase());
+      const snap2 = await ref.get();
+      const cur = snap2.exists ? __spreadValues({}, snap2.data()) : {};
+      const k = "best" + c.mode;
+      if (cur[k] && cur[k] >= c.score) return `${c.nick} hat schon ${cur[k]} Punkte als ${c.mode}. Nichts ge\xE4ndert.`;
+      cur[k] = c.score;
+      cur["title" + c.mode] = "per Code eingereicht";
+      cur["at" + c.mode] = Date.now();
+      cur.nick = c.nick;
+      await ref.set(cur);
+      return `Eingetragen: ${c.nick} mit ${c.score} Punkten als ${c.mode}.`;
+    } catch (e) {
+      return "Eintragen hat nicht geklappt. Bitte gleich nochmal versuchen.";
+    }
+  }
+  async function boardHTML() {
+    const rows = { L: [], M: [] };
+    let shared = false;
+    if (DBX) {
+      try {
+        for (const m of ["L", "M"]) {
+          const q = await DBX.collection("scores").orderBy("best" + m, "desc").limit(10).get();
+          q.docs.forEach((d) => {
+            const x = d.data() || {};
+            if (typeof x["best" + m] === "number") rows[m].push({ nick: x.nick || "?", score: x["best" + m], title: x["title" + m] || "", me: d.id === MYID });
+          });
+        }
+        shared = true;
+      } catch (e) {
+        shared = false;
+        rows.L = [];
+        rows.M = [];
+      }
+    }
+    if (!shared) {
+      const lb = localBest();
+      ["L", "M"].forEach((m) => rows[m] = (lb[m] || []).map((x) => __spreadProps(__spreadValues({}, x), { me: false })));
+    }
+    const tbl = (m, label) => `<h4 style="margin:6px 0 2px;font-family:var(--display)">${label}</h4>` + (rows[m].length ? `<div class="stat">${rows[m].map((r, i) => `<span>${i + 1}. ${esc(r.nick)}${r.me ? " (du)" : ""}<br><small style="color:var(--muted)">${esc(r.title)}</small></span><span>${r.score}</span>`).join("")}</div>` : '<p style="color:var(--muted)">Noch keine Eintr\xE4ge.</p>');
+    return `<h3>Bestenliste</h3><p style="color:var(--muted);font-size:.85rem">${shared ? "Gemeinsame Bestenliste aller Spieler." : "Nur auf diesem Ger\xE4t gespeichert."}</p>` + tbl("L", "L \xB7 Glowbies schmuggeln") + tbl("M", "M \xB7 Zocken, Bier & Arminia");
+  }
+  async function showBoard(back, msg) {
+    sheet("<h3>Bestenliste</h3><p>L\xE4dt\u2026</p>", []);
+    let owner = false;
+    try {
+      owner = !!(USR && await USR.isOwner());
+    } catch (e) {
+    }
+    const form = owner && DBX ? `<div class="say"><label for="codein" style="font-size:.85rem;color:var(--muted)">Score-Code von Freunden eintragen</label><input id="codein" placeholder="z. B. M-147-Anna-7QK" style="-webkit-user-select:text;user-select:text;width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--wall);color:var(--ink);font:inherit">${msg ? `<p style="margin:6px 0 0;font-size:.85rem">${esc(msg)}</p>` : ""}</div>` : "";
+    const btns = [{ label: "Zur\xFCck", go: true, fn: back }];
+    if (form) btns.unshift({ label: "Code eintragen", fn: async () => {
+      const r = await addByCode($("codein").value);
+      showBoard(back, r);
+    } });
+    sheet(await boardHTML() + form, btns);
+  }
+  function scoreBlock(mode, score, title) {
+    return `<div class="say"><b>Punkte: ${score}</b><br><label for="nick" style="font-size:.85rem;color:var(--muted)">Dein Name f\xFCr die Bestenliste</label><br><input id="nick" maxlength="20" value="${esc(lastNick())}" style="-webkit-user-select:text;user-select:text;width:100%;box-sizing:border-box;margin-top:4px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--wall);color:var(--ink);font:inherit"><p style="margin:8px 0 2px;font-size:.85rem;color:var(--muted)">Spielst du \xFCber den Link? Schick diesen Code an den Spiel-Besitzer, dann kommt dein Score in die gemeinsame Liste:</p><code id="scode" style="-webkit-user-select:all;user-select:all;font-size:1rem;font-weight:800;color:var(--lamp)">${makeCode(mode, score, lastNick())}</code> <button class="btn" id="copycode" type="button" style="padding:4px 10px;font-size:.75rem">Kopieren</button></div>`;
+  }
+  function finaleButtons(mode, score, title) {
+    let saved = false;
+    setTimeout(() => {
+      const n = $("nick"), c = $("scode"), b = $("copycode");
+      if (n && c) n.addEventListener("input", () => {
+        c.textContent = makeCode(mode, score, n.value);
+      });
+      if (b) b.addEventListener("click", () => {
+        const t = c.textContent;
+        (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => {
+          b.textContent = "Kopiert!";
+        }).catch(() => {
+          const r = document.createRange();
+          r.selectNodeContents(c);
+          const sel = getSelection();
+          sel.removeAllRanges();
+          sel.addRange(r);
+          b.textContent = "Markiert";
+        });
+      });
+    }, 0);
+    return [
+      { label: "In Bestenliste eintragen", go: true, fn: async () => {
+        if (saved) return;
+        saved = true;
+        const nick = $("nick") ? $("nick").value : "";
+        const where = await submitScore(mode, score, title, nick);
+        await showBoard(() => {
+          busy = false;
+          modalQueue = [];
+          begin();
+        });
+        if (where !== "shared") {
+          const p = document.querySelector("#sheet p");
+          if (p) p.textContent = where === "local" ? "Auf diesem Ger\xE4t gespeichert. F\xFCr die gemeinsame Liste fehlt dir hier die Schreibberechtigung." : "Auf diesem Ger\xE4t gespeichert.";
+        }
+      } },
+      { label: "Ohne Eintrag nochmal spielen", fn: () => {
+        busy = false;
+        modalQueue = [];
+        begin();
+      } }
+    ];
+  }
+  let S, snap = null, modalQueue = [], busy = false;
+  const START = 540, TURN = 10;
+  function freshGame() {
+    setTimeout(() => {
+    }, 0);
+    S = {
+      day: 0,
+      t: START,
+      susp: 0,
+      room: "wohn",
+      inv: 0,
+      disguise: null,
+      items: { korb: "bad", pizza: "kueche" },
+      spots: {},
+      packages: [],
+      log: [],
+      lost: 0,
+      fun: 0,
+      spar: 0,
+      spentL: 0,
+      birthdayUsed: false,
+      fleaDone: false,
+      received: 0,
+      total: 0,
+      M: { room: "arbeit", ex: null, step: 0, left: 0, seen: false },
+      ring: null,
+      sched: [],
+      deliv: []
+    };
+    Object.keys(SPOTS).forEach((k) => S.spots[k] = 0);
+  }
+  function buildSchedule(d) {
+    const r = (a, b) => Math.round((a + Math.random() * (b - a)) / 10) * 10;
+    const flags = DAYS[d].flags;
+    const ex = [];
+    [[560, 620], [650, 690], [880, 950], [1010, 1070]].forEach((w) => ex.push({ start: r(...w), kind: "coffee", steps: [["flur", 1], ["kueche", 1, "coffee"], ["flur", 1]] }));
+    [[800, 860], [1100, 1130]].forEach((w) => ex.push({ start: r(...w), kind: "bath", steps: [["flur", 1], ["bad", 1, "bath"], ["flur", 1]] }));
+    ex.push({ start: 720, kind: "lunch", steps: [["flur", 1], ["kueche", 2, "cook lunch"], ["wohn", 3, flags.water ? "sofa water" : "sofa"], ["flur", 1]] });
+    if (flags.swing) ex.push({ start: 1080, kind: "swing", steps: [["flur", 2, "swing golf"], ["wohn", 2, "sofa"], ["flur", 1]] });
+    if (DAYS[d].evening) ex.push({ start: 1140, kind: "evening", why: DAYS[d].evening, steps: [["flur", 1, "evening"], ["weg", 12, "eve"], ["flur", 1, "evehome"]] });
+    else ex.push({ start: 1140, kind: "dinner", steps: [["flur", 1], ["kueche", 2, flags.oven ? "oven" : "cook"], ["wohn", 3, "sofa evening"], ["flur", 1]] });
+    (DAYS[d].outs || []).forEach(([w, dur, why]) => {
+      const e = { start: r(...w), kind: "out", why };
+      if (Math.random() < 0.55) {
+        const k = 1 + (Math.random() * 2 | 0), f = pick(FORGOT);
+        e.forgot = f;
+        e.steps = [["flur", 1, "leave"], ["weg", k, "out"], ["flur", 1, "forgot"], [f[1], 1, "fetch"], ["flur", 1], ["weg", Math.max(1, dur - k), "out2"], ["flur", 1, "home"]];
+      } else e.steps = [["flur", 1, "leave"], ["weg", dur, "out"], ["flur", 1, "home"]];
+      if (why === "range") e.steps.push(["flur", 2, "putt"]);
+      ex.push(e);
+    });
+    ex.push({ start: 1290, kind: "bed", steps: [["flur", 1], ["bad", 1, "bath"], ["schlaf", 30, "bed"]] });
+    ex.sort((a, b) => a.start - b.start);
+    let end = 0;
+    for (const e of ex) {
+      if (e.start < end) e.start = end + 10;
+      end = e.start + e.steps.reduce((s, x) => s + x[1], 0) * TURN;
+    }
+    return ex;
+  }
+  function say(text, cls = "") {
+    S.log.unshift({ text, cls });
+    if (S.log.length > 30) S.log.pop();
+  }
+  function addSusp(n) {
+    S.susp = Math.max(0, Math.min(100, S.susp + n));
+  }
+  function queue(fn) {
+    modalQueue.push(fn);
+    if (!busy) nextModal();
+  }
+  function nextModal() {
+    const fn = modalQueue.shift();
+    if (!fn) {
+      busy = false;
+      $("modal").hidden = true;
+      render();
+      return;
+    }
+    busy = true;
+    $("modal").hidden = false;
+    fn();
+  }
+  function sheet(html, buttons) {
+    var _a;
+    $("sheet").innerHTML = html + `<div class="choice" id="choice"></div>`;
+    const box = $("choice");
+    buttons.forEach((b, i) => {
+      const el = document.createElement("button");
+      el.className = "btn" + (b.go ? " go" : "");
+      el.id = "ch" + i;
+      el.innerHTML = b.label;
+      el.addEventListener("click", b.fn);
+      box.appendChild(el);
+    });
+    (_a = box.querySelector("button")) == null ? void 0 : _a.focus();
+  }
+  const done = () => {
+    if (S.susp >= 100) return gameOver();
+    nextModal();
+  };
+  function excuseScene(title, setup, onResult, ctx) {
+    const opts = EXCUSES.filter((e) => !(e.once && S.birthdayUsed) && (!e.ctx || e.ctx === ctx) && !(e.daily && (S.dailyEx || []).includes(e.daily)));
+    const three = [];
+    const mine = opts.filter((e) => e.mine);
+    if (mine.length) {
+      const m = pick(mine);
+      three.push(m);
+      opts.splice(opts.indexOf(m), 1);
+    }
+    while (three.length < 3 && opts.length) {
+      three.push(opts.splice(Math.random() * opts.length | 0, 1)[0]);
+    }
+    sheet(
+      `<h3>${title}</h3>${duo("!")}<div class="say">${setup}</div><p>Was sagt L?</p>`,
+      three.map((e) => ({ label: e.t, fn: () => {
+        if (e.once) S.birthdayUsed = true;
+        if (e.daily) S.dailyEx = [...S.dailyEx || [], e.daily];
+        const win = Math.random() < e.p;
+        onResult(win);
+        sheet(
+          `<h3>${win ? "Gerade so." : "Autsch."}</h3><div class="say"><b class="lq">L:</b> ${e.t}</div><div class="say">${win ? e.ok : e.no}</div><p>${win ? "Ms Misstrauen steigt nur ein kleines bisschen." : "Ms Misstrauen steigt deutlich."}</p>`,
+          [{ label: "Weiter", go: true, fn: done }]
+        );
+      } }))
+    );
+  }
+  function caughtCarrying() {
+    S.caughtDay = true;
+    queue(() => {
+      const n = S.inv;
+      bubble("M", "Was ist DAS?", 3500);
+      excuseScene(
+        "M kommt um die Ecke!",
+        `<b>M</b> bleibt stehen und schaut auf Ls H\xE4nde. Darin: ${n} ${plural(n, "Glowbie", "Glowbies")}. Sie leuchten. Nat\xFCrlich leuchten sie.`,
+        (win) => {
+          addSusp(win ? 5 : 25);
+          say(win ? "M hat die Ausrede geschluckt. F\xFCrs Erste." : "M seufzt, sagt nichts und geht weiter. Das ist schlimmer als jede Diskussion.", win ? "good" : "bad");
+        },
+        "carry"
+      );
+    });
+  }
+  function caughtInOffice() {
+    if (S.M.office) return;
+    S.M.office = true;
+    S.caughtDay = true;
+    queue(() => {
+      addSusp(10);
+      if (S.inv > 0 && !S.disguise) {
+        excuseScene(
+          "Im Arbeitszimmer erwischt!",
+          "M kommt zur\xFCck und findet L in seinem Arbeitszimmer. <b>M:</b> \u201ESuchst du was?\u201C Und was leuchtet da in deiner Hand?",
+          (win) => {
+            addSusp(win ? 5 : 25);
+          },
+          "carry"
+        );
+      } else {
+        sheet(`<h3>Ups.</h3><div class="say"><b>M:</b> \u201EWas machst du in meinem B\xFCro?\u201C</div><div class="say"><b class="lq">L:</b> ${pick(["\u201EIch hab nur\u2026 deinen Kaffeetassen-Turm bewundert.\u201C", "\u201EIch wollte nur deinen Schreibtisch aufr\xE4umen.\u201C"])}</div><p>M glaubt ihr nicht ganz.</p>`, [{ label: "Weiter", go: true, fn: done }]);
+      }
+    });
+  }
+  function discovery(spotId) {
+    const sp = SPOTS[spotId];
+    S.caughtDay = true;
+    queue(() => {
+      if (spotId === "monitor") {
+        S.spots.monitor--;
+        S.lost++;
+        addSusp(-10);
+        sheet(
+          `<h3>\xDCberraschung!</h3><div class="say">${sp.find}</div><div class="say"><b>M:</b> \u201EOh. Der ist ja s\xFC\xDF. Ist der f\xFCr mich? Danke!\u201C</div><p>Ms Misstrauen sinkt. Der Glowbie ist ab jetzt allerdings Ms B\xFCrokollege.</p>`,
+          [{ label: "Weiter", go: true, fn: done }]
+        );
+        return;
+      }
+      excuseScene(
+        "Fund!",
+        sp.find + " <b>M:</b> \u201EWas ist das?\u201C",
+        (win) => {
+          if (win) {
+            addSusp(8);
+            say(`Der Glowbie darf bleiben (${sp.n}). M will davon nichts mehr wissen.`, "good");
+          } else {
+            addSusp(25);
+            S.spots[spotId]--;
+            S.lost++;
+            say(`M seufzt, nimmt den Glowbie (${sp.n}) wortlos mit und stellt ihn auf seinen Schreibtisch.`, "bad");
+          }
+        },
+        "find"
+      );
+    });
+  }
+  function checkSpots(room, tags) {
+    const list = tags.split(" ");
+    Object.entries(SPOTS).forEach(([id, sp]) => {
+      if (sp.room !== room || S.spots[id] <= 0) return;
+      for (const tag of list) {
+        const p = sp.trig[tag] && Math.min(1, sp.trig[tag] * (1 + 0.6 * nightAt(S.t)));
+        if (p && Math.random() < p) {
+          discovery(id);
+          break;
+        }
+      }
+    });
+  }
+  function mEnter(room, turns, tags) {
+    S.M.room = room;
+    S.M.left = turns;
+    if (tags && tags !== "bed") checkSpots(room, tags);
+    if (tags === "coffee") {
+      S.coffees = (S.coffees || 0) + 1;
+      bubble("M", pick(["Kaffee. Jetzt.", "Koffein\u2026", "Nur ein kleiner\u2026"]));
+    }
+    if (tags && tags.startsWith("swing")) bubble("M", pick(["Schwung\u2026 und durch!", "H\xFCfte! H\xFCfte!", "Naturtalent."]));
+    if (tags === "bed") bubble("M", "Gute Nacht\u2026 Zzz", 4e3);
+    if (tags && tags.includes("sofa") && S.spots.hummer > 0 && Math.random() < 0.5) worldBubble("hummer", ...HUMMER_XY, "Ich seh nix. Ich bin Hummi.", 3200);
+    if (tags && tags.startsWith("swing")) say("M holt den Driver aus der Golftasche und \xFCbt im Flur seinen Schwung. Die Lampe zittert.", "cue");
+    if (tags === "door") {
+      const pk = S.ring;
+      S.ring = null;
+      S.packages.push({ room: "flur", n: pk.n });
+      addSusp(15);
+      say(`M hat dem Paketboten aufgemacht. \u201ESchon wieder ein Paket f\xFCr dich. Das ${pick(["sechste", "achte", "elfte"])} diese Woche.\u201C Es liegt jetzt im Flur.`, "bad");
+    }
+    if (tags === "bed") say("21:30. M geht fr\xFCh ins Bett. \u201EGute Nacht\u2026 mach nicht zu lang.\u201C Ab jetzt geh\xF6rt die Wohnung L, aber leise!", "good");
+    const ex = S.M.ex;
+    if (tags === "leave") {
+      say(OUTS[ex.why].leave, "cue");
+      bubble("M", ex.why === "range" ? "Fore!" : "Bin gleich zur\xFCck!");
+      if (CAR.includes(ex.why)) checkSpots("flur", "drive");
+      if (ex.why === "range") checkSpots("flur", "golf");
+    }
+    if (tags === "putt") {
+      say("M \xFCbt im Flur Putten. Mit Ms Kaffeetasse als Loch.", "cue");
+      bubble("M", pick(["Und\u2026 versenkt!", "Mist. Nochmal.", "Tiger Woods w\xE4r stolz.", "Naturtalent."]));
+      checkSpots("flur", "putt");
+    }
+    if (tags && tags.includes("lunch")) {
+      if (S.room === "kueche") {
+        bubble("L", "Essen ist fertig!");
+        bubble("M", pick(["Lecker!", "Du bist die Beste.", "Nachschlag?"]));
+        ach("koch");
+        say("P\xFCnktlich um zw\xF6lf: L hat gekocht, mit Metal auf voller Lautst\xE4rke. M ist gl\xFCcklich und vollkommen unverd\xE4chtig.", "good");
+        addSusp(-4);
+      } else {
+        bubble("M", "Hunger! Wo bleibt das Essen?", 3200);
+        addSusp(5);
+        say("M steht hungrig in der leeren K\xFCche. \u201EWolltest du nicht kochen?\u201C Er wird misstrauisch.", "bad");
+      }
+    }
+    if (tags === "evening") eveningScene(ex.why);
+    if (tags === "evehome") {
+      bubble("M", "Nur noch kurz Mails.");
+      say("L und M sind zur\xFCck. M verschwindet sofort wieder im B\xFCro: \u201ENur noch kurz Mails.\u201C", "cue");
+    }
+    if (tags === "out") say("Die Wohnungst\xFCr f\xE4llt ins Schloss. M ist weg! Das Arbeitszimmer steht offen.", "good");
+    if (tags === "out2") say("T\xFCr zu. Diesmal ist M wirklich weg. Wahrscheinlich.", "good");
+    if (tags === "forgot") {
+      bubble("M", "Mist! Vergessen!");
+      say(`Ein Schl\xFCssel dreht sich im Schloss! M ist zur\xFCck: \u201EHab ${ex.forgot[0]} vergessen!\u201C`, "bad");
+      flash();
+    }
+    if (tags === "fetch") {
+      if (room === "arbeit" && S.spots.monitor > 0) discovery("monitor");
+    }
+    if (tags === "home") {
+      say(`M ist zur\xFCck. ${pick(["Er hat drei Sorten Kaffee gekauft.", "Mit Brezeln. Eine fehlt schon.", "Er pfeift. Das ist verd\xE4chtig gute Laune.", "Er hat keine D\xFCbel bekommen."])}`, "cue");
+      if (S.packages.some((p) => p.room === "flur")) {
+        addSusp(12);
+        say("M schaut auf das Paket im Flur. Dann auf L. Dann wieder aufs Paket.", "bad");
+      }
+    }
+  }
+  function eveningScene(why) {
+    queue(() => {
+      const T = why === "essen" ? { h: "Feierabend? Fast.", a: "19:00. M klappt den Laptop kurz zu: \u201EKomm, wir gehen essen. Korean BBQ?\u201C", b: '<b class="lq">L:</b> \u201ESchon wieder? Die Reste von letzter Woche liegen noch im Gefrierfach.\u201C <b>M:</b> \u201EEben. Die heben wir auf.\u201C', c: "Beide steigen in den Fiat. Das Verdeck ist offen, die Frisur danach auch.", back: "Satt und zufrieden fahren L und M nach Hause.", drop: "Beim Bezahlen f\xE4llt L ein Glowbie aus der Jackentasche. M seufzt und sagt nichts." } : { h: "Abend im Golfclub", a: "19:00. M: \u201EIch will noch ein paar B\xE4lle schlagen. Kommst du mit in den Club?\u201C", b: '<b class="lq">L:</b> \u201ENur wenn es Aperol gibt.\u201C', c: "L sitzt mit einem Aperol auf der Terrasse. M schl\xE4gt 80 B\xE4lle und erz\xE4hlt danach 20 Minuten von seinem Schwung.", back: "Auf der Heimfahrt erkl\xE4rt M den perfekten Abschlag. Zweimal.", drop: "Auf der Terrasse rollt L ein Glowbie aus der Tasche, direkt vor Ms Golfschuhe. M seufzt." };
+      sheet(
+        `<h3>${T.h}</h3>${duo("<span>&amp;</span>")}<p>${T.a}</p><div class="say">${T.b}</div><p>${T.c}</p>${S.inv > 0 ? "<p>L hat noch Glowbies dabei. Hoffentlich bleiben die in der Tasche\u2026</p>" : ""}`,
+        [{ label: "Mitkommen", go: true, fn: () => {
+          if (S.disguise) {
+            S.items[S.disguise] = S.room === "weg" ? "flur" : S.room;
+            S.disguise = null;
+          }
+          S.room = "weg";
+          S.evening = true;
+          if (S.inv > 0 && Math.random() < 0.5) {
+            addSusp(10);
+            say(T.drop, "bad");
+          }
+          checkSpots("flur", "drive");
+          for (let k = 0; k < 20 && !(S.M.ex && S.M.ex.kind === "evening" && S.M.step >= 2); k++) tick();
+          S.room = "flur";
+          S.evening = false;
+          acc = 0;
+          say(T.back, "good");
+          done();
+        } }]
+      );
+    });
+  }
+  function flash() {
+    var _a;
+    const pl = $("plan");
+    (_a = pl.animate) == null ? void 0 : _a.call(pl, [{ filter: "brightness(1.8)" }, { filter: "none" }], { duration: 500 });
+  }
+  function mTick() {
+    const M = S.M;
+    if (M.ex) {
+      M.left--;
+      if (M.left <= 0) {
+        M.step++;
+        if (M.step >= M.ex.steps.length) {
+          M.ex = null;
+          M.room = "arbeit";
+          M.seen = false;
+          checkSpots("arbeit", "call");
+          if (S.spots.monitor > 0) discovery("monitor");
+          if (S.room === "arbeit") caughtInOffice();
+          return;
+        }
+        let st = M.ex.steps[M.step];
+        if (st[0] === "kueche" && st[2] === "coffee" && S.room === "kueche" && S.t >= 660 && S.t < 720 && M.ex.steps[M.step + 1]) {
+          bubble("M", pick(["Zu laut! Ich komm sp\xE4ter.", "Metal? Dann eben kein Kaffee."]), 3e3);
+          say("M steckt den Kopf in die K\xFCche, h\xF6rt Metal auf voller Lautst\xE4rke und dreht wieder um. Kaffee gibt es sp\xE4ter.", "cue");
+          M.step++;
+          st = M.ex.steps[M.step];
+          M.left = st[1];
+          M.room = st[0];
+          return;
+        }
+        mEnter(st[0], st[1], st[2]);
+      }
+      return;
+    }
+    const e = S.sched.find((x) => x.start <= S.t && !x.used);
+    if (e) {
+      e.used = true;
+      M.ex = e;
+      M.step = 0;
+      M.seen = false;
+      M.office = false;
+      const st = e.steps[0];
+      mEnter(st[0], st[1], st[2]);
+      return;
+    }
+    const soon = S.sched.find((x) => x.start === S.t + 2 * TURN && !x.used);
+    if (soon) say(pick(CUES[soon.kind]), "cue");
+  }
+  function mAsleep() {
+    return !!(S.M.ex && S.M.ex.kind === "bed" && S.M.step >= 2);
+  }
+  function meetCheck() {
+    if (MODE === "M") return meetCheckM();
+    if (mAsleep()) {
+      if (S.room === "schlaf" && S.inv > 0 && !S.disguise && !S.M.seen && Math.random() < 0.3) {
+        S.M.seen = true;
+        addSusp(6);
+        bubble("M", "Hmm\u2026? Was leuchtet da?", 3e3);
+        say("M blinzelt im Halbschlaf. \u201EWas leuchtet da?\u201C L erstarrt. M schl\xE4ft wieder ein.", "bad");
+      }
+      return;
+    }
+    if (!S.M.ex || S.M.room !== S.room || S.room === "weg") {
+      S.M.seen = false;
+      return;
+    }
+    if (S.M.ex.kind === "bed" || S.M.seen) return;
+    S.M.seen = true;
+    if (S.room === "arbeit") {
+      caughtInOffice();
+      return;
+    }
+    if (S.inv > 0) {
+      if (S.disguise) {
+        addSusp(3);
+        say(pick(DISGUISE[S.disguise].line));
+      } else caughtCarrying();
+    } else {
+      say(pick(MEET));
+      bubble("M", S.susp >= 50 ? "Hmmm\u2026?" : pick(["Na?", "Hey du.", "Alles gut?", "Huhu."]));
+    }
+  }
+  function tick() {
+    if (MODE === "M") return tickM();
+    S.t += TURN;
+    const d = S.deliv.find((x) => x.t === S.t && !x.done);
+    if (d) {
+      d.done = true;
+      S.ring = { n: d.n, left: 2 };
+      say("Es klingelt! Der Paketbote steht vor der T\xFCr.", "cue");
+    }
+    mTick();
+    hummiWarn();
+    if (S.ring) {
+      if (S.room === "flur") {
+        takeRing();
+      } else if (--S.ring.left <= 0) {
+        if (!S.M.ex) {
+          S.M.ex = { start: S.t, kind: "door", steps: [["flur", 1, "door"]] };
+          S.M.step = 0;
+          S.M.seen = false;
+          mEnter("flur", 1, "door");
+        } else if (S.M.room === "weg") {
+          const pk = S.ring;
+          S.ring = null;
+          S.packages.push({ room: "flur", n: pk.n });
+          say("Der Paketbote legt das Paket vor die Wohnungst\xFCr. Schnell, bevor M zur\xFCckkommt!", "cue");
+        } else mEnter(S.M.room, S.M.left, "door");
+      } else say("Es klingelt nochmal. Ungeduldig.", "cue");
+    }
+    if (!S.M.ex && Math.random() < 0.2) bubble("M", metalOn() && Math.random() < 0.5 ? "Ist das Metal? Ich bin im Call!" : pick(OFFICE), 3e3);
+    if (mAsleep() && Math.random() < 0.15) bubble("M", "Zzz\u2026", 2500);
+    if (S.t >= 1410 && !S.nightQ) {
+      S.nightQ = true;
+      night();
+    }
+    if (S.neighbor > 0) S.neighbor--;
+    if (S.pigeon > 0) S.pigeon--;
+    maybeEvent();
+    meetCheck();
+  }
+  function takeRing() {
+    if (MODE === "M") return takeRingM();
+    bubble("L", "Danke!");
+    const n = S.ring.n;
+    S.ring = null;
+    S.inv += n;
+    S.received += n;
+    say(`L rei\xDFt dem Paketboten das Paket aus der Hand, ${pick(["unterschreibt mit einem Smiley", "fl\xFCstert \u201EDanke, Komplize\u201C", "schlie\xDFt leise die T\xFCr"])} und stopft den Karton ins Altpapier. ${n} Glowbies in der Tasche.`, "good");
+  }
+  let coolUntil = 0, paused = false, speed = 1, acc = 0, lastF = performance.now();
+  const TICK_MS = 4450;
+  function act(fn, cost = 1e3) {
+    const now = performance.now();
+    if (busy || now < coolUntil) return;
+    if (paused) setPaused(false);
+    fn();
+    coolUntil = now + cost / speed;
+    if (S.ring && S.room === "flur") takeRing();
+    meetCheck();
+    render();
+    setTimeout(() => {
+      if (!busy) render();
+    }, cost / speed + 20);
+    if (S.susp >= 100 && !busy) gameOver();
+  }
+  function setPaused(v) {
+    paused = v;
+    $("pause").setAttribute("aria-pressed", v);
+    $("pausetag").hidden = !v;
+    document.querySelector(".app").classList.toggle("paused", v);
+  }
+  function frame(now) {
+    const dt = Math.min(250, now - lastF);
+    lastF = now;
+    if (S && S.sched.length && !busy && !paused) {
+      acc += dt * speed;
+      if (acc >= TICK_MS) {
+        acc = 0;
+        tick();
+        render();
+        if (S.susp >= 100 && !busy) gameOver();
+      }
+      $("tickbar").style.transform = `scaleX(${acc / TICK_MS})`;
+    }
+    const c = performance.now() < coolUntil;
+    const a = $("acts");
+    if (a.classList.contains("cool") !== c) a.classList.toggle("cool", c);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && S && S.sched.length && !busy) setPaused(true);
+  });
+  function night() {
+    queue(() => {
+      const events = [];
+      Object.entries(SPOTS).forEach(([id, sp]) => {
+        if (sp.room === "schlaf" && S.spots[id] > 0 && sp.trig.bed && Math.random() < sp.trig.bed) {
+          S.spots[id]--;
+          S.lost++;
+          addSusp(20);
+          events.push(sp.find + " Er legt ihn wortlos auf deinen Nachttisch.");
+        }
+      });
+      if (S.inv > 0) {
+        addSusp(30);
+        events.push(`L liegt mit ${S.inv} ${plural(S.inv, "Glowbie", "Glowbies")} unter der Decke im Bett. Die Decke leuchtet. M: \u201EDas erkl\xE4rst du mir morgen.\u201C`);
+        S.lost += S.inv;
+        S.inv = 0;
+      }
+      S.packages.forEach((p) => {
+        addSusp(15);
+        S.lost += p.n;
+        events.push("M stolpert im dunklen Flur \xFCber ein Paket. \u201EAua. Was ist DA drin?\u201C Er nimmt es mit ins Arbeitszimmer.");
+      });
+      S.packages = [];
+      const hidden = Object.values(S.spots).reduce((a, b) => a + b, 0);
+      const last = S.day === DAYS.length - 1;
+      if (!S.caughtDay) ach("nie");
+      if (S.susp < 20) ach("radar");
+      sheet(
+        `<h3>Tag ${S.day + 1} geschafft</h3>
+      <p>23:30. L geht als Letzte ins Bett. M schl\xE4ft schon seit zwei Stunden und schnarcht leise.</p>
+      ${events.map((e) => `<div class="say">${e}</div>`).join("") || '<div class="say">Ruhige Nacht. M schnarcht leise. Die Glowbies leuchten in ihren Verstecken.</div>'}
+      <div class="stat"><span>Gut versteckt</span><span>${hidden}</span><span>Bei M gelandet</span><span>${S.lost}</span><span>Ms Misstrauen</span><span>${S.susp} %</span></div>${achToday()}`,
+        [{ label: last ? "Zum Finale" : "Schlafen bis morgen", go: true, fn: () => {
+          if (S.susp >= 100) return gameOver();
+          if (last) return finale();
+          modalQueue = [];
+          busy = false;
+          startDay(S.day + 1);
+        } }]
+      );
+    });
+  }
+  function startDay(d) {
+    if (MODE === "M") return startDayM(d);
+    S.nightQ = false;
+    S.coffees = 0;
+    S.events = 0;
+    S.used = [];
+    S.neighbor = 0;
+    S.pigeon = 0;
+    S.caughtDay = false;
+    S.callDone = false;
+    S.aperolDone = false;
+    S.warned = null;
+    acc = 0;
+    if (paused) setPaused(false);
+    const prev = S.day;
+    S.day = d;
+    S.t = START;
+    S.room = "wohn";
+    S.dailyEx = [];
+    S.ring = null;
+    S.disguise = null;
+    S.lTV = null;
+    S.deco = Math.max(S.deco || 1, d + 1);
+    S.items = { korb: "bad", pizza: "kueche" };
+    S.M = { room: "arbeit", ex: null, step: 0, left: 0, seen: false };
+    S.sched = buildSchedule(d);
+    S.deliv = DAYS[d].deliveries.map((x) => __spreadValues({}, x));
+    S.total += DAYS[d].deliveries.reduce((a, x) => a + x.n, 0) + (DAYS[d].flea ? 2 : 0);
+    S.fleaDone = false;
+    const morning = [];
+    if (d > 0) {
+      addSusp(-20);
+      if (SPOTS.hafer && S.spots.hafer > 0) {
+        for (let i = S.spots.hafer; i > 0; i--) {
+          if (Math.random() < SPOTS.hafer.trig.muesli) {
+            S.spots.hafer--;
+            S.lost++;
+            addSusp(20);
+            morning.push(SPOTS.hafer.find);
+          }
+        }
+      }
+    }
+    snap = JSON.stringify(S);
+    S.log = [];
+    say(`09:00. L klappt im Wohnzimmer ihren Laptop auf und legt ihren Kritzelblock daneben. M arbeitet schon seit sechs.`);
+    queue(() => {
+      sheet(
+        `<h3>Tag ${d + 1}</h3>${d > 0 ? "<p>\xDCber Nacht ist Ms Misstrauen etwas gesunken. Er hat dr\xFCber geschlafen.</p>" : ""}
+      ${morning.map((m) => `<div class="say">W\xE4hrend L noch schlief: ${m} Er hat ihn behalten.</div>`).join("")}
+      <p>${DAYS[d].intro}</p><div class="say"><b>M</b> beim Fr\xFChst\xFCck um acht: ${DAYS[d].m}</div>`,
+        [{ label: "Los geht\u2019s", go: true, fn: done }]
+      );
+    });
+    render();
+  }
+  function gameOver() {
+    if (MODE === "M") return gameOverM();
+    modalQueue = [];
+    busy = true;
+    $("modal").hidden = false;
+    sheet(
+      `<h3>Aufgeflogen!</h3>${duo(GB)}<div class="say">M steht im Flur und h\xE4lt einen Glowbie hoch wie ein Beweisst\xFCck im Tatort. <b>M:</b> \u201EL. Wir m\xFCssen reden. Wie viele sind es?\u201C</div><div class="say"><b class="lq">L:</b> \u201EDefiniere \u201Aviele\u2018.\u201C</div><p>Ms Misstrauen hat 100 % erreicht.</p>`,
+      [
+        { label: `Tag ${S.day + 1} nochmal versuchen`, go: true, fn: () => {
+          S = JSON.parse(snap);
+          S.log = [];
+          say("Zweiter Versuch. L hat einen Plan. Ungef\xE4hr.");
+          busy = false;
+          modalQueue = [];
+          $("modal").hidden = true;
+          render();
+        } },
+        { label: "Ganz von vorn", fn: () => {
+          busy = false;
+          modalQueue = [];
+          begin();
+        } }
+      ]
+    );
+  }
+  function finale() {
+    const kept = Object.values(S.spots).reduce((a, b) => a + b, 0);
+    const rank = kept >= 12 ? "Meisterschmugglerin" : kept >= 9 ? "Glowbie-Legende" : kept >= 6 ? "Solide Komplizin" : "Anf\xE4ngerin mit Herz";
+    sheet(
+      `<h3>Tag 4, 07:00 Uhr</h3>${duo(GB + GB + GB)}
+    <p>L wird von einem seltsamen Schimmern geweckt. Die T\xFCr zum Arbeitszimmer steht einen Spalt offen. M ist nicht da, er holt Br\xF6tchen.</p>
+    <p>L schaut hinein. Hinter dem Monitor, im Regal, in der Schreibtischschublade: Dutzende Glowbies. Darunter ${S.lost} ${plural(S.lost, "bekannter", "bekannte")}, und viele, die L noch nie gesehen hat.</p>
+    <div class="say">Die Wohnungst\xFCr geht auf. <b>M</b> mit der Br\xF6tchent\xFCte: \u201EOh. Okay. Also\u2026 seit M\xE4rz. Ich hab \u201Agr\xFCner Plastikschrott\u2018 gesagt, damit du meine nicht findest.\u201C</div>
+    <div class="say"><b class="lq">L:</b> \u201EWir brauchen ein gr\xF6\xDFeres Regal.\u201C</div>
+    <div class="stat"><span>Glowbies versteckt</span><span>${kept} von ${S.total}</span><span>Bei M gelandet</span><span>${S.lost}</span><span>Titel</span><span>${rank}</span></div>${scoreBlock("L", kept * 10 + Math.max(0, 100 - S.susp), rank)}`,
+      finaleButtons("L", kept * 10 + Math.max(0, 100 - S.susp), rank)
+    );
+  }
+  function render() {
+    var _a;
+    $("clock").childNodes[0].nodeValue = fmt(S.t);
+    $("dayl").textContent = `Tag ${S.day + 1} von ${DAYS.length}`;
+    $("susbar").style.width = S.susp + "%";
+    document.querySelector(".sus>span").textContent = MODE === "M" ? "Ls Genervtheit" : "Ms Misstrauen";
+    const ms = !S.M.ex ? "im B\xFCro" : S.M.room === "weg" ? "unterwegs" : S.M.ex.kind === "bed" ? S.M.step >= 2 ? "schl\xE4ft" : "geht schlafen" : { flur: "im Flur", kueche: "in der K\xFCche", wohn: "im Wohnzimmer", bad: "im Bad", schlaf: "im Schlafzimmer", arbeit: "im B\xFCro" }[S.M.room];
+    $("mstat").textContent = "M " + ms;
+    if (MODE === "M") {
+      const nr = npcRoomM();
+      $("mstat").textContent = "L " + (npcAsleep() ? "schl\xE4ft" : nr === "weg" ? "unterwegs" : { flur: "im Flur", kueche: "in der K\xFCche", wohn: "im Wohnzimmer", bad: "im Bad", schlaf: "im Schlafzimmer", arbeit: "im B\xFCro" }[nr]);
+    }
+    $("bag").innerHTML = MODE === "M" ? `<b>${S.fun}</b>Akku ${(_a = S.battery) != null ? _a : 100} %` : `<b>${GB}${S.inv}</b>${S.disguise ? DISGUISE[S.disguise].n : "dabei"}`;
+    $("dayl").textContent = `Tag ${S.day + 1} von ${(MODE === "M" ? DAYS_M : DAYS).length}`;
+    const mOut = S.M.ex;
+    updateHouse();
+    $("log").innerHTML = S.log.slice(0, 6).reverse().map((l) => `<p class="${l.cls}">${l.text}</p>`).join("");
+    if (MODE === "M") {
+      $("acts").innerHTML = actsM();
+      return;
+    }
+    const mHere = mOut && S.M.room === S.room;
+    let h = `<h2><span>${ROOMS[S.room].n}${mHere ? " \xB7 M ist hier!" : ""}</span><small>Tippen: verstecken \xB7 Halten: zur\xFCckholen</small></h2><div class="spots">`;
+    const spots = Object.entries(SPOTS).filter(([, s]) => s.room === S.room);
+    spots.forEach(([id, s]) => {
+      const c = S.spots[id];
+      const canIn = !(S.inv <= 0 || c >= s.cap || mHere || id === "fiat" && carGone());
+      h += `<button class="spot${canIn ? "" : " no"}${c > 0 ? " has" : ""}" id="spot-${id}" data-spot="${id}" aria-label="${s.n}: ${c} von ${s.cap}. Tippen zum Verstecken, halten zum Zur\xFCckholen"><span class="n">${s.n}</span><span class="c">${canIn ? "<i>+</i>" : ""}${c}/${s.cap}</span><span class="d">${s.d}</span></button>`;
+    });
+    h += '</div><div class="row">';
+    S.packages.forEach((p, i) => {
+      if (p.room === S.room) h += `<button class="btn go" id="pk-${i}" data-pk="${i}">Paket aufrei\xDFen (${p.n})</button>`;
+    });
+    Object.entries(DISGUISE).forEach(([k, dz]) => {
+      if (S.items[k] === S.room && !S.disguise) h += `<button class="btn" id="take-${k}" data-take="${k}">${dz.n} nehmen</button>`;
+    });
+    if (S.disguise) h += `<button class="btn" id="drop" data-drop="1">${DISGUISE[S.disguise].n} abstellen</button>`;
+    if (S.room === "wohn" && !mAsleep() && S.t >= 540 && S.t <= 1020 && !S.callDone) h += `<button class="btn" id="lcall" data-call="1">Tratsch-Telefonat (30 Min.)</button>`;
+    if (S.room === "kueche" && S.t >= 900 && S.t <= 1130 && !S.aperolDone) h += `<button class="btn" id="laperol" data-aperol="1">Aperol-Pause (30 Min.)</button>`;
+    if (S.room === "wohn" && mAsleep()) {
+      h += `<button class="btn" id="lt-aoe" data-lt="aoe">AoE zocken</button><button class="btn" id="lt-crime" data-lt="crime">True Crime schauen</button>`;
+    }
+    if (S.room === "flur" && DAYS[S.day].flea && !S.fleaDone && S.t <= 1020) h += `<button class="btn" id="flea" data-flea="1">Zum Flohmarkt (1 Std.)</button>`;
+    h += `</div>`;
+    $("acts").innerHTML = h;
+  }
+  let longFired = false, lpT = null;
+  $("acts").addEventListener("pointerdown", (e) => {
+    const b = e.target.closest(".spot");
+    if (!b || busy) return;
+    longFired = false;
+    clearTimeout(lpT);
+    lpT = setTimeout(() => {
+      const id = b.dataset.spot;
+      longFired = true;
+      if (S.spots[id] <= 0 || S.M.ex && S.M.room === S.room || id === "fiat" && carGone()) return;
+      if (navigator.vibrate) navigator.vibrate(15);
+      b.classList.add("long");
+      act(() => {
+        S.spots[id]--;
+        S.inv++;
+        say(`L holt einen Glowbie zur\xFCck (${SPOTS[id].n}).`);
+      });
+    }, 480);
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((t) => $("acts").addEventListener(t, () => clearTimeout(lpT)));
+  if (!window.PointerEvent) {
+    $("acts").addEventListener("touchstart", (e) => {
+      const b = e.target.closest(".spot");
+      if (!b || busy) return;
+      longFired = false;
+      clearTimeout(lpT);
+      lpT = setTimeout(() => {
+        const id = b.dataset.spot;
+        longFired = true;
+        if (S.spots[id] <= 0 || S.M.ex && S.M.room === S.room || id === "fiat" && carGone()) return;
+        b.classList.add("long");
+        act(() => {
+          S.spots[id]--;
+          S.inv++;
+          say(`L holt einen Glowbie zur\xFCck (${SPOTS[id].n}).`);
+        });
+      }, 480);
+    }, { passive: true });
+    ["touchend", "touchcancel", "touchmove"].forEach((t) => $("acts").addEventListener(t, () => clearTimeout(lpT), { passive: true }));
+  }
+  $("acts").addEventListener("contextmenu", (e) => {
+    if (e.target.closest(".spot")) e.preventDefault();
+  });
+  $("plan").addEventListener("click", (e) => {
+    const b = e.target.closest(".room");
+    if (!b || busy || performance.now() < coolUntil) return;
+    const r = b.dataset.r;
+    if (r === S.room) return;
+    if (!(ADJ[S.room] || []).includes(r)) {
+      say(`Von hier kommst du nicht direkt ${r === "kueche" ? "in die K\xFCche" : "ins " + ROOMS[r].n}. Erst durch den Flur.`);
+      render();
+      return;
+    }
+    if (MODE === "L" && r === "arbeit" && !S.M.ex) {
+      say("Die T\xFCr zum Arbeitszimmer ist zu. Dahinter: \u201EKannst du meinen Bildschirm sehen?\u201C");
+      render();
+      return;
+    }
+    act(() => {
+      S.room = r;
+      S.gaming = false;
+      S.watching = false;
+      S.practice = null;
+      if (S.disguise) S.items[S.disguise] = "L";
+      roomEntered(r);
+    }, 650);
+  });
+  $("plan").addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("room")) {
+      e.preventDefault();
+      e.target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    }
+  });
+  $("acts").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b || b.disabled || busy) return;
+    const D = b.dataset;
+    if (D.m) return onActM(D.m);
+    if (D.lt) return act(() => {
+      S.lTV = D.lt;
+      if (D.lt === "aoe") {
+        bubble("L", "Wololo!");
+        say("M schl\xE4ft. L zockt Age of Empires. Leise. Fast leise.");
+        if (Math.random() < 0.4) bubble("M", "Wololo\u2026? Zzz\u2026", 3e3);
+      } else {
+        bubble("L", "Der G\xE4rtner war\u2019s!");
+        say("L schaut eine True-Crime-Doku und versteckt Glowbies jetzt mit Profi-Wissen.");
+      }
+    });
+    if (D.spot) {
+      const id = D.spot, s = SPOTS[id], c = S.spots[id];
+      if (longFired) {
+        longFired = false;
+        return;
+      }
+      const mHere = S.M.ex && S.M.room === S.room;
+      if (mHere) {
+        say("Nicht jetzt, M steht direkt daneben!", "bad");
+        render();
+        return;
+      }
+      if (id === "fiat" && carGone()) {
+        say("Der Fiat ist gerade nicht da.");
+        render();
+        return;
+      }
+      if (c >= s.cap) {
+        say(`${s.n} ist voll. Halten, um einen Glowbie zur\xFCckzuholen.`);
+        render();
+        return;
+      }
+      if (S.inv <= 0) {
+        say(c > 0 ? "L hat keinen Glowbie mehr dabei. Halten, um einen zur\xFCckzuholen." : "L hat keinen Glowbie dabei. Erst ein Paket aufrei\xDFen!");
+        render();
+        return;
+      }
+      D.in = id;
+    }
+    if (D.in) act(() => {
+      S.spots[D.in]++;
+      S.inv--;
+      S.roomsUsed = [.../* @__PURE__ */ new Set([...S.roomsUsed || [], SPOTS[D.in].room])];
+      if (S.roomsUsed.length >= 6) ach("alle");
+      if (D.in === "hummer" && S.spots.hummer >= SPOTS.hummer.cap) ach("hummi");
+      if (Math.random() < 0.35) bubble("L", pick(["Psst!", "Bleib da.", "Gut so.", "Keiner sieht dich."]), 2e3);
+      say(`L versteckt einen Glowbie (${SPOTS[D.in].n}). ${pick(["Er sieht zufrieden aus.", "Er h\xE4lt ganz still.", "Niemand wird ihn hier finden. Hoffentlich."])}`);
+    });
+    else if (D.call) act(() => {
+      S.callDone = true;
+      ach("tratsch");
+      const fr = Math.random() < 0.5, home = !(S.M.ex && S.M.room === "weg");
+      bubble("L", fr ? "Hiii! Du glaubst nicht\u2026" : "S! Hast du schon geh\xF6rt\u2026?", 3200);
+      say(fr ? "L ruft ihre Freundin an und kritzelt dabei Herzchen-Hummer auf ihren Block." : "L hat einen Tratsch-Termin mit Kollege S. Auf ihrem Block entsteht ein Hummer mit Krawatte.");
+      if (home && Math.random() < 0.3) {
+        addSusp(10);
+        bubble("M", "Glow-was?!", 3e3);
+        say("L sagt etwas zu laut \u201EGlowbie\u201C. Von nebenan: \u201EGlow-was?!\u201C Ms Misstrauen steigt.", "bad");
+      } else {
+        addSusp(-6);
+        const nx = S.sched.filter((x) => !x.used && x.start > S.t + 30).sort((a, b2) => a.start - b2.start)[0];
+        say(`Nach dem Telefonat ist L tiefenentspannt.${nx ? ` Auf ihrem Block steht jetzt auch: \u201EM kommt gegen ${fmt(nx.start)} raus.\u201C` : ""}`, "good");
+      }
+      passTime(3);
+    }, 650);
+    else if (D.aperol) act(() => {
+      S.aperolDone = true;
+      ach("aperol");
+      addSusp(-10);
+      worldBubble("aperol", ox("kueche") + 92, oy("kueche") + 30, "Endlich!", 2600);
+      bubble("L", "Saluti!", 2600);
+      say("L g\xF6nnt sich eine Aperol-Pause. Die Flasche ist zufrieden. L auch. Ms Misstrauen sinkt.", "good");
+      if (S.M.ex && S.M.room === "kueche") {
+        bubble("M", "Krieg ich auch einen?", 3e3);
+      }
+      passTime(3);
+    }, 650);
+    else if (D.out) act(() => {
+      S.spots[D.out]--;
+      S.inv++;
+      say(`L holt einen Glowbie zur\xFCck (${SPOTS[D.out].n}).`);
+    });
+    else if (D.pk !== void 0) act(() => {
+      const p = S.packages.splice(+D.pk, 1)[0];
+      S.inv += p.n;
+      S.received += p.n;
+      say(`L rei\xDFt das Paket auf: ${p.n} Glowbies. Der Karton fliegt ins Altpapier.`, "good");
+    });
+    else if (D.take) act(() => {
+      S.disguise = D.take;
+      S.items[D.take] = "L";
+      say(`L nimmt den ${DISGUISE[D.take].n}. Die perfekte Tarnung.`);
+    });
+    else if (D.drop) act(() => {
+      S.items[S.disguise] = S.room;
+      say(`L stellt den ${DISGUISE[S.disguise].n} ab.`);
+      S.disguise = null;
+    });
+    else if (D.flea) {
+      if (S.disguise) {
+        S.items[S.disguise] = "flur";
+        S.disguise = null;
+      }
+      S.fleaDone = true;
+      S.room = "weg";
+      S.deco = Math.min(3, (S.deco || 1) + 1);
+      say("L schleicht zur Wohnungst\xFCr hinaus. Ziel: Flohmarkt.");
+      for (let i = 0; i < 6; i++) tick();
+      acc = 0;
+      S.room = "flur";
+      S.inv += 2;
+      S.received += 2;
+      say("L kommt vom Flohmarkt zur\xFCck: zwei Glowbies f\xFCr drei Euro und eine Hummer-Wimpelkette, in einer Jutetasche unter einem Lauch.", "good");
+      meetCheck();
+      render();
+    }
+  });
+  $("pause").addEventListener("click", () => {
+    if (!busy) setPaused(!paused);
+  });
+  $("speed").addEventListener("click", () => {
+    speed = speed === 1 ? 2 : 1;
+    $("speed").textContent = speed + "\xD7";
+    $("speed").setAttribute("aria-pressed", speed === 2);
+  });
+  function begin() {
+    freshGame();
+    S.sched = [];
+    render();
+    queue(roleSheet);
+  }
+  function roleSheet() {
+    sheet(`<h3>Hide and Seek with Glowbies</h3>${duo(GB + "<span>vs.</span>")}<p>Wer spielt?</p>`, [
+      { label: "L: Glowbies schmuggeln", go: true, fn: () => {
+        MODE = "L";
+        introL();
+      } },
+      { label: "M: Zocken, Bier und Arminia", fn: () => {
+        MODE = "M";
+        S.t = START_M;
+        S.room = "schlaf";
+        FIGPOS.L = null;
+        FIGPOS.M = null;
+        introM();
+      } },
+      { label: "Bestenliste ansehen", fn: () => showBoard(roleSheet) },
+      { label: "Erfolge ansehen", fn: () => achSheet(roleSheet) }
+    ]);
+  }
+  function introL() {
+    sheet(
+      `<h3>Hide and Seek with Glowbies</h3>${duo(GB + "<span>vs.</span>")}
+    <p>L liebt Glowbies: kleine Figuren mit Antenne, die im Dunkeln gl\xFChen. M nennt sie liebevoll \u201Egr\xFCner Plastikschrott\u201C.</p>
+    <p>L findet das nicht. Drei Tage lang muss sie neue Glowbies in die Wohnung schmuggeln und verstecken, ohne dass M etwas merkt.</p>
+    <div class="say"><b class="lq">\xDCber L:</b> Sie arbeitet ab neun im Wohnzimmer am Laptop, macht gern Pausen und kritzelt in jedem Meeting Hummer auf ihren Block. Beim Kochen l\xE4uft Metal.</div>
+    <div class="say"><b>\xDCber M:</b> Er steht um sechs auf, arbeitet im Arbeitszimmer, kommt nur f\xFCr Kaffee, Klo und Essen raus und geht abends fr\xFCh ins Bett. Dann geh\xF6rt die Wohnung L. Manchmal verl\xE4sst er sogar die Wohnung, und manchmal kommt er pl\xF6tzlich zur\xFCck, weil er etwas vergessen hat.</div>
+    <p>Die Uhr l\xE4uft von selbst. Tippe auf benachbarte R\xE4ume, um zu gehen, und versteck Glowbies mit +. Pause und doppeltes Tempo findest du oben rechts. Manche Verstecke sind sicher, manche nur, bis M zuf\xE4llig hineinschaut. Abends wird es dunkel, und dann leuchten schlecht versteckte Glowbies besonders auff\xE4llig. Wenn Ms Misstrauen 100 % erreicht, fliegt alles auf.</p>`,
+      [{ label: "Mission starten", go: true, fn: () => {
+        nextModal();
+        startDay(0);
+      } }]
+    );
+  }
+  function introM() {
+    sheet(
+      `<h3>Ansto\xDF um 18:30</h3>${duo(PAD + "<span>vs.</span>")}
+    <p>M zockt gern EA FC, trinkt gern ein Bier und schaut jedes Spiel von Arminia Bielefeld. Hummi tr\xE4gt dabei das Trikot. M steht um sechs auf und geht fr\xFCh ins Bett, L ist abends l\xE4nger wach.</p>
+    <p>L findet, die PlayStation l\xE4uft zu oft. Und statt Bier h\xE4tte sie lieber einen Aperol mit ihm. Ins Outlet gehen beide gern zusammen, in der Stadt Kleidung shoppen ist Ls Sache.</p>
+    <div class="say"><b>Dein Ziel:</b> Sammle Freizeitpunkte mit Zocken, Fu\xDFball, Bier und Golf\xFCbungen in der Wohnung, sei p\xFCnktlich in deinen Calls und beim Mittagessen, und behalte Ls Eink\xE4ufe und Glowbie-Pakete im Blick. Wird L zu genervt, zieht sie den Stecker.</div>
+    <p>Fu\xDFball schauen ist erlaubt, L spielt dann nebenher am Handy. Beim Zocken solltest du schnell umschalten, wenn sie reinkommt.</p>`,
+      [{ label: "Anpfiff", go: true, fn: () => {
+        nextModal();
+        startDay(0);
+      } }]
+    );
+  }
+  const CUSTOM = [];
+  const ROOMTAG = { schlaf: "bed", bad: "bath", kueche: "coffee", wohn: "sofa", flur: "leave", arbeit: "call" };
+  function customSVG(r) {
+    return CUSTOM.filter((c) => c.room === r).map((c) => {
+      const k = c.size || 1, x = c.x, y = c.y;
+      if (c.type === "hummer") return lob(x, y, 2.6 * k, "#e8453c");
+      if (c.type === "glowbie") return `<g class="gbm" transform="translate(${x - 6 * k} ${y - 14 * k}) scale(${0.5 * k})">${GBP}</g>`;
+      if (c.type === "pflanze") return `<g transform="translate(${x} ${y}) scale(${k})"><path d="M-5 0 h10 l-1.5 -8 h-7z" fill="#c9a24a"/><ellipse cx="-4" cy="-12" rx="4" ry="2.4" fill="#4f9a5a" transform="rotate(-30 -4 -12)"/><ellipse cx="4" cy="-13" rx="4" ry="2.4" fill="#5aa36a" transform="rotate(30 4 -13)"/><ellipse cx="0" cy="-16" rx="2.4" ry="4" fill="#4f9a5a"/></g>`;
+      if (c.type === "bild") return `<g transform="translate(${x} ${y}) scale(${k})"><rect x="-8" y="-7" width="16" height="14" rx="1" fill="#c9a24a"/><rect x="-6.5" y="-5.5" width="13" height="11" fill="#cfe9f2"/>${lob(0, 0, 1.4, "#e8453c")}</g>`;
+      if (c.type === "schild") return `<g transform="translate(${x} ${y}) scale(${k})"><rect x="${-(String(c.text || "").length * 2.2 + 4)}" y="-5" width="${String(c.text || "").length * 4.4 + 8}" height="9" rx="2" fill="#f3eefa" stroke="#8a6a4f" stroke-width=".8"/><text x="0" y="1.8" text-anchor="middle" font-family="Fredoka,sans-serif" font-weight="700" font-size="5.4" fill="#2a2235">${esc(c.text || "")}</text></g>`;
+      return "";
+    }).join("");
+  }
+  const DEF = JSON.parse(JSON.stringify({ SPOTS, SPOTPOS, EXCUSES, EXCUSES_M, OFFICE, MEET, MEET_L, PUSHES, DAYS, DAYS_M, CALLS }));
+  function restoreTo(obj, def) {
+    const v = JSON.parse(JSON.stringify(def));
+    if (Array.isArray(obj)) obj.splice(0, obj.length, ...v);
+    else {
+      Object.keys(obj).forEach((k) => delete obj[k]);
+      Object.assign(obj, v);
+    }
+  }
+  function applyConfig(c) {
+    var _a, _b;
+    restoreTo(SPOTS, DEF.SPOTS);
+    restoreTo(SPOTPOS, DEF.SPOTPOS);
+    restoreTo(EXCUSES, DEF.EXCUSES);
+    restoreTo(EXCUSES_M, DEF.EXCUSES_M);
+    restoreTo(OFFICE, DEF.OFFICE);
+    restoreTo(MEET, DEF.MEET);
+    restoreTo(MEET_L, DEF.MEET_L);
+    restoreTo(PUSHES, DEF.PUSHES);
+    restoreTo(DAYS, DEF.DAYS);
+    restoreTo(DAYS_M, DEF.DAYS_M);
+    restoreTo(CALLS, DEF.CALLS);
+    CUSTOM.splice(0);
+    if (c) {
+      if (c.spots) for (const [id, v] of Object.entries(c.spots)) {
+        if (v.del) {
+          delete SPOTS[id];
+          continue;
+        }
+        const base = SPOTS[id] || { trig: {} };
+        const sp = __spreadProps(__spreadValues({}, base), { room: v.room || base.room, n: v.n || base.n || "Versteck", d: (_b = (_a = v.d) != null ? _a : base.d) != null ? _b : "", cap: +v.cap || base.cap || 1 });
+        if (v.risk != null) {
+          const t = base.trig || {}, tags = Object.keys(t);
+          if (tags.length && sp.room === base.room) {
+            const mx = Math.max(...Object.values(t)) || 1;
+            sp.trig = {};
+            tags.forEach((k) => sp.trig[k] = Math.min(1, t[k] / mx * v.risk));
+          } else sp.trig = v.risk > 0 ? { [ROOMTAG[sp.room]]: v.risk } : {};
+        }
+        if (v.find) sp.find = v.find;
+        else if (!sp.find) sp.find = `M schaut genauer hin: ${sp.n}. Da leuchtet doch was!`;
+        SPOTS[id] = sp;
+        if (v.pos) SPOTPOS[id] = v.pos;
+      }
+      const L = (arr, val) => {
+        if (Array.isArray(val) && val.length) arr.splice(0, arr.length, ...val);
+      };
+      L(OFFICE, c.office);
+      L(MEET, c.meet);
+      L(MEET_L, c.meetL);
+      L(PUSHES, c.pushes);
+      L(EXCUSES, c.excuses);
+      L(EXCUSES_M, c.excusesM);
+      L(CALLS, c.calls);
+      (c.days || []).forEach((d, i) => {
+        if (DAYS[i] && d) Object.assign(DAYS[i], d);
+      });
+      (c.daysM || []).forEach((d, i) => {
+        if (DAYS_M[i] && d) Object.assign(DAYS_M[i], d);
+      });
+      if (Array.isArray(c.deco)) CUSTOM.push(...c.deco);
+    }
+    const pl = $("plan");
+    if (pl) pl.innerHTML = "";
+    Object.keys(FIGPOS).forEach((k) => delete FIGPOS[k]);
+  }
+  window.__glow = {
+    DEF,
+    SPOTS,
+    SPOTPOS,
+    EXCUSES,
+    EXCUSES_M,
+    OFFICE,
+    MEET,
+    MEET_L,
+    PUSHES,
+    DAYS,
+    DAYS_M,
+    CALLS,
+    CUSTOM,
+    ROOMS,
+    ORDER,
+    LABEL,
+    ROOMTAG,
+    ox,
+    oy,
+    roomSVG,
+    SCX,
+    SCY,
+    SCS,
+    applyConfig,
+    get S() {
+      return S;
+    },
+    restart() {
+      busy = false;
+      modalQueue = [];
+      $("modal").hidden = true;
+      begin();
+    },
+    halt() {
+      busy = true;
+      modalQueue = [];
+      $("modal").hidden = true;
+    }
+  };
+  applyConfig(window.GLOWBIES_CFG || null);
+  begin();
+})();
+
+</script>
+</body></html>
